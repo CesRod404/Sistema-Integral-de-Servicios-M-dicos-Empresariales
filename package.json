@@ -1,0 +1,12 @@
+{
+  "name": "sisme",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Sistema Integral de Servicios Médicos Empresariales",
+  "scripts": {
+    "dev": "npm --prefix 04_Desarrollo_Codigo/src run dev",
+    "build": "npm --prefix 04_Desarrollo_Codigo/src run build",
+    "test": "npm --prefix 04_Desarrollo_Codigo/src run test",
+    "preview": "npm --prefix 04_Desarrollo_Codigo/src run preview"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "installCommand": "npm install --prefix 04_Desarrollo_Codigo/src",
+  "buildCommand": "npm run build",
+  "outputDirectory": "04_Desarrollo_Codigo/src/dist",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
