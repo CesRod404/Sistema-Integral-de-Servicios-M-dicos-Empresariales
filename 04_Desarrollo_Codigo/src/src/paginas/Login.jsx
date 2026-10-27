@@ -36,7 +36,6 @@ export function Login() {
       <form className="tarjeta login-caja" onSubmit={enviar}>
         <Logo />
         <h1>Inicio de sesión</h1>
-        {params.get('cita') === '1' ? <Aviso tipo="info">La cita se programa desde el perfil Administrador, con un empleado ya registrado.</Aviso> : null}
         <Campo etiqueta="Correo" requerido>
           <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Campo>

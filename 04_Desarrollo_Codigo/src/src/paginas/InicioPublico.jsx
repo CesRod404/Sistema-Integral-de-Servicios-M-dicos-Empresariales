@@ -20,7 +20,7 @@ export function InicioPublico() {
         <div className="hero-figura" aria-hidden="true">
           <div className="hero-tarjeta">
             <strong>Atención de salud laboral</strong>
-            <p>El personal autorizado programa la cita. El doctor registra la atención y el administrador controla el cobro.</p>
+            <p>El doctor registra la atención y el administrador controla el cobro.</p>
           </div>
         </div>
       </section>
