@@ -18,7 +18,6 @@ export function LayoutPublico() {
               {etiqueta}
             </NavLink>
           ))}
-          <NavLink to="/login?cita=1">Cita</NavLink>
         </nav>
         <NavLink to="/login" className="btn btn-azul">Inicio de sesión</NavLink>
       </header>
