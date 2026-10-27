@@ -1,26 +1,17 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { Logo } from './Iconos.jsx'
-
-const ENLACES = [
-  ['/', 'Inicio'],
-  ['/servicios', 'Nuestros servicios'],
-  ['/contacto', 'Contáctanos']
-]
+import { Outlet, useLocation } from 'react-router-dom'
+import NavBar from './NavBar.jsx'
 
 export function LayoutPublico() {
+  const { pathname } = useLocation()
+  const activeTab = pathname.startsWith('/servicios')
+    ? 'servicios'
+    : pathname.startsWith('/contacto')
+      ? 'contacto'
+      : 'inicio'
+
   return (
     <>
-      <header className="barra-publica">
-        <Logo />
-        <nav className="nav-publica">
-          {ENLACES.map(([ruta, etiqueta]) => (
-            <NavLink key={ruta} to={ruta} className={({ isActive }) => (isActive ? 'activa' : undefined)} end={ruta === '/'}>
-              {etiqueta}
-            </NavLink>
-          ))}
-        </nav>
-        <NavLink to="/login" className="btn btn-azul">Inicio de sesión</NavLink>
-      </header>
+      <NavBar activeTab={activeTab} />
       <Outlet />
     </>
   )

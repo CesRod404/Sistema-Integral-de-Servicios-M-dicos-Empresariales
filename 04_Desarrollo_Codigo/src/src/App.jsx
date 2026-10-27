@@ -3,8 +3,8 @@ import { useSesion } from './datos/ProveedorSesion.jsx'
 import { puedeAcceder } from './domain/roles.js'
 import { LayoutPublico } from './componentes/LayoutPublico.jsx'
 import { LayoutApp } from './componentes/LayoutApp.jsx'
-import { InicioPublico } from './paginas/InicioPublico.jsx'
-import { ServiciosPublico } from './paginas/ServiciosPublico.jsx'
+import Inicio from './paginas/Inicio.jsx'
+import Servicios from './paginas/Servicios.jsx'
 import { ContactoPublico } from './paginas/ContactoPublico.jsx'
 import { Login } from './paginas/Login.jsx'
 import { Recuperar } from './paginas/Recuperar.jsx'
@@ -36,8 +36,8 @@ export function App() {
   return (
     <Routes>
       <Route element={<LayoutPublico />}>
-        <Route path="/" element={<InicioPublico />} />
-        <Route path="/servicios" element={<ServiciosPublico />} />
+        <Route path="/" element={<Inicio />} />
+        <Route path="/servicios" element={<Servicios />} />
         <Route path="/contacto" element={<ContactoPublico />} />
         <Route path="/login" element={<Login />} />
         <Route path="/recuperar" element={<Recuperar />} />
