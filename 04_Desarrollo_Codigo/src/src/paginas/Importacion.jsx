@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
-import { aplicarMapa, CAMPOS_IMPORTACION, clasificarFilas, evaluarConfirmacion, MENSAJES_IMPORTACION, sugerirMapa, validarExtension } from '../domain/excelImport.js'
-import { leerHoja, plantillaExcel } from '../domain/excelArchivo.js'
+import { aplicarMapa, CAMPOS_IMPORTACION, clasificarFilas, evaluarConfirmacion, MENSAJES_IMPORTACION, sugerirMapa } from '../domain/excelImport.js'
+import { plantillaExcel } from '../domain/excelArchivo.js'
+import { filasDesdeOperaciones, leerEmpleadosDesdeExcel } from '../domain/ingestaEmpleados.js'
 import { Aviso, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 
 export function Importacion() {
   const { api } = useSesion()
+  const entradaRef = useRef(null)
   const [empresas, setEmpresas] = useState([])
   const [empresaId, setEmpresaId] = useState('')
   const [nombreArchivo, setNombreArchivo] = useState('')
@@ -50,17 +52,21 @@ export function Importacion() {
   async function leerArchivo(archivo) {
     setError('')
     setMensaje('')
-    const extension = validarExtension(archivo?.name)
-    if (extension) {
-      setError(extension)
+    if (entradaRef.current) entradaRef.current.value = ''
+    const lectura = await leerEmpleadosDesdeExcel(archivo)
+    if (!lectura.ok) {
+      setNombreArchivo('')
+      setEncabezados([])
+      setRegistros([])
+      setValores([])
+      setDecisiones({})
+      setError(lectura.mensaje)
       return
     }
-    const buffer = await archivo.arrayBuffer()
-    const hoja = await leerHoja(buffer)
-    const sugerido = sugerirMapa(hoja.encabezados)
-    setNombreArchivo(archivo.name)
-    setEncabezados(hoja.encabezados)
-    setRegistros(hoja.registros)
+    const sugerido = sugerirMapa(lectura.encabezados)
+    setNombreArchivo(lectura.nombreArchivo)
+    setEncabezados(lectura.encabezados)
+    setRegistros(lectura.registros)
     setMapa(sugerido)
     setDecisiones({})
     setSobrescribir(false)
@@ -69,7 +75,7 @@ export function Importacion() {
       setError(MENSAJES_IMPORTACION.FALTA_COLUMNA_NOMBRE)
       return
     }
-    setValores(aplicarMapa(hoja.registros, sugerido))
+    setValores(aplicarMapa(lectura.registros, sugerido))
   }
 
   function aplicarMapeo() {
@@ -101,15 +107,7 @@ export function Importacion() {
       empresaId,
       nombreArchivo,
       sobrescribir,
-      filas: evaluacion.operaciones.map((item) => ({
-        accion: item.accion,
-        nombre: item.valores.nombre,
-        curp: item.valores.curp,
-        clave_empleado: item.valores.claveEmpleado,
-        email: item.valores.email,
-        telefono: item.valores.telefono,
-        edad: item.valores.edad
-      }))
+      filas: filasDesdeOperaciones(evaluacion.operaciones)
     })
     if (!resultado.ok) {
       setError(resultado.mensaje)
@@ -159,7 +157,7 @@ export function Importacion() {
           onDrop={(e) => { e.preventDefault(); setSobre(false); leerArchivo(e.dataTransfer.files?.[0]) }}
         >
           <p>Arrastre el Excel o selecciónelo.</p>
-          <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => leerArchivo(e.target.files?.[0])} />
+          <input ref={entradaRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => leerArchivo(e.target.files?.[0])} />
         </div>
       </div>
       {encabezados.length ? (

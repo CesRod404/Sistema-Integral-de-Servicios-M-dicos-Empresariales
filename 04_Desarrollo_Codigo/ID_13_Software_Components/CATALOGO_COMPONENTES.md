@@ -16,7 +16,7 @@ Versión de trabajo de la primera entrega ejecutable. El código vive en `04_Des
 | Validadores | `src/domain/validadores.js` | Contraseña, correo, CURP, teléfono, edad, empresa, empleado, PDF y cita |
 | Clínica | `src/domain/clinica.js` | Asistencia, cancelación, cierre y columna del tablero |
 | Cobranza | `src/domain/cobranza.js` | Cargo con precio histórico, pago, consolidado y resumen de periodo |
-| Importación | `src/domain/excelImport.js`, `src/domain/excelArchivo.js` | Clasificación pura y lectura ExcelJS |
+| Importación | `src/domain/excelImport.js`, `src/domain/excelArchivo.js`, `src/domain/ingestaEmpleados.js` | Clasificación pura, lectura ExcelJS y lote que `importar_empleados` registra en Supabase |
 | Fechas y errores | `src/domain/fecha.js`, `src/domain/errores.js` | Zona `America/Mexico_City` y mensajes en español |
 | Interfaz | `src/componentes`, `src/paginas`, `src/estilos.css` | Pantallas en español |
 
