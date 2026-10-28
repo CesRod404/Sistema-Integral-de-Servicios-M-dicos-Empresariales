@@ -142,6 +142,18 @@ td { padding: 12px 10px; border-bottom: 1px solid #f0f4f8; vertical-align: middl
 tr.incompleto { background: #fff8df; }
 tr.duplicado { background: #fff1d6; }
 tr.valido { background: white; }
+.vista-importacion input,
+.vista-importacion select {
+  width: 100%;
+  min-width: 6.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: white;
+}
+.vista-importacion input.celda-error { border-color: #c2410c; background: #fff4d6; }
+.resumen-previa { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
+.resumen-previa span { background: #f4f7fb; color: var(--navy); border-radius: 999px; padding: 4px 10px; font-weight: 800; }
 
 .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 0.78rem; font-weight: 800; }
 .badge-verde { background: var(--green-bg); color: var(--green); }
