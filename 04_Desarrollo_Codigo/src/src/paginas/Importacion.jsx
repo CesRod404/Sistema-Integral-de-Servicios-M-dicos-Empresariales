@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
-import { aplicarMapa, CAMPOS_IMPORTACION, clasificarFilas, evaluarConfirmacion, MENSAJES_IMPORTACION, sugerirMapa } from '../domain/excelImport.js'
+import { CAMPOS_IMPORTACION, MENSAJES_IMPORTACION } from '../domain/excelImport.js'
 import { plantillaExcel } from '../domain/excelArchivo.js'
+import { excelIngestionValidator } from '../domain/excelIngestionValidator.js'
 import { filasDesdeOperaciones, leerEmpleadosDesdeExcel } from '../domain/ingestaEmpleados.js'
 import { Aviso, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 
+const COLUMNAS_PREVIEW = ['nombre', 'curp', 'claveEmpleado', 'email', 'telefono', 'edad']
+
 export function Importacion() {
   const { api } = useSesion()
-  const entradaRef = useRef(null)
   const [empresas, setEmpresas] = useState([])
   const [empresaId, setEmpresaId] = useState('')
   const [nombreArchivo, setNombreArchivo] = useState('')
@@ -40,19 +42,18 @@ export function Importacion() {
 
   useEffect(() => { cargarBase() }, [api])
 
-  const clasificadas = useMemo(
-    () => (valores.length ? clasificarFilas(valores, existentes, empresaId) : []),
-    [valores, existentes, empresaId]
+  const vista = useMemo(
+    () => (valores.length ? excelIngestionValidator.vistaPrevia({ valores, existentes, empresaId, decisiones, sobrescribir }) : null),
+    [valores, existentes, empresaId, decisiones, sobrescribir]
   )
-  const evaluacion = useMemo(
-    () => (clasificadas.length ? evaluarConfirmacion(clasificadas, decisiones, { sobrescribir }) : null),
-    [clasificadas, decisiones, sobrescribir]
-  )
+  const clasificadas = vista?.filas ?? []
+  const evaluacion = vista?.evaluacion ?? null
+  const resumen = vista?.resumen ?? null
 
   async function leerArchivo(archivo) {
+    if (!archivo) return
     setError('')
     setMensaje('')
-    if (entradaRef.current) entradaRef.current.value = ''
     const lectura = await leerEmpleadosDesdeExcel(archivo)
     if (!lectura.ok) {
       setNombreArchivo('')
@@ -63,30 +64,23 @@ export function Importacion() {
       setError(lectura.mensaje)
       return
     }
-    const sugerido = sugerirMapa(lectura.encabezados)
+    const sugerido = excelIngestionValidator.sugerirMapa(lectura.encabezados)
     setNombreArchivo(lectura.nombreArchivo)
     setEncabezados(lectura.encabezados)
     setRegistros(lectura.registros)
     setMapa(sugerido)
     setDecisiones({})
     setSobrescribir(false)
-    if (!sugerido.nombre) {
-      setValores([])
+    setValores(excelIngestionValidator.aplicar(lectura.registros, sugerido))
+    if (excelIngestionValidator.columnasFaltantes(sugerido).length) {
       setError(MENSAJES_IMPORTACION.FALTA_COLUMNA_NOMBRE)
-      return
     }
-    setValores(aplicarMapa(lectura.registros, sugerido))
   }
 
   function aplicarMapeo() {
-    if (!mapa.nombre) {
-      setError(MENSAJES_IMPORTACION.FALTA_COLUMNA_NOMBRE)
-      setValores([])
-      return
-    }
-    setError('')
     setDecisiones({})
-    setValores(aplicarMapa(registros, mapa))
+    setValores(excelIngestionValidator.aplicar(registros, mapa))
+    setError(excelIngestionValidator.columnasFaltantes(mapa).length ? MENSAJES_IMPORTACION.FALTA_COLUMNA_NOMBRE : '')
   }
 
   function editar(indice, campo, valor) {
@@ -157,12 +151,21 @@ export function Importacion() {
           onDrop={(e) => { e.preventDefault(); setSobre(false); leerArchivo(e.dataTransfer.files?.[0]) }}
         >
           <p>Arrastre el Excel o selecciónelo.</p>
-          <input ref={entradaRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => leerArchivo(e.target.files?.[0])} />
+          <input
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={(e) => {
+              const archivo = e.target.files?.[0]
+              e.target.value = ''
+              if (archivo) leerArchivo(archivo)
+            }}
+          />
         </div>
       </div>
       {encabezados.length ? (
         <div className="panel">
           <h3>Mapeo de columnas</h3>
+          {excelIngestionValidator.columnasFaltantes(mapa).length ? <Aviso tipo="pendiente">{MENSAJES_IMPORTACION.FALTA_COLUMNA_NOMBRE}</Aviso> : null}
           <div className="mapa-columnas">
             {CAMPOS_IMPORTACION.map((campo) => (
               <Campo key={campo.id} etiqueta={campo.etiqueta} requerido={campo.obligatorio}>
@@ -177,8 +180,16 @@ export function Importacion() {
         </div>
       ) : null}
       {clasificadas.length ? (
-        <div className="panel tabla-contenedor">
+        <div className="panel tabla-contenedor vista-importacion">
           <h3>Vista previa</h3>
+          {resumen ? (
+            <p className="resumen-previa">
+              <span>Filas: {resumen.total}</span>
+              <span>Válidas: {resumen.validas}</span>
+              <span>Con error: {resumen.conError}</span>
+              <span>Duplicadas: {resumen.duplicadas}</span>
+            </p>
+          ) : null}
           {evaluacion && !evaluacion.ok ? evaluacion.mensajes.map((texto) => <Aviso key={texto} tipo="pendiente">{texto}</Aviso>) : <Aviso tipo="ok">La carga puede confirmarse.</Aviso>}
           <table>
             <thead>
@@ -186,15 +197,19 @@ export function Importacion() {
             </thead>
             <tbody>
               {clasificadas.map((fila) => {
-                const clase = fila.incompleta || fila.errores.length ? 'incompleto' : fila.duplicadoBd || fila.duplicadoArchivo ? 'duplicado' : 'valido'
+                const clase = fila.marca === 'error' ? 'incompleto' : fila.marca === 'duplicado' ? 'duplicado' : 'valido'
+                const camposError = new Set(fila.camposConError)
                 return (
-                  <tr key={fila.indice} className={clase}>
-                    {['nombre', 'curp', 'claveEmpleado', 'email', 'telefono', 'edad'].map((campo, posicion) => (
-                      posicion === 0 ? <td key="n">{fila.indice + 1}</td> : null
-                    ))}
-                    {['nombre', 'curp', 'claveEmpleado', 'email', 'telefono', 'edad'].map((campo) => (
+                  <tr key={fila.indice} className={clase} data-marca={fila.marca}>
+                    <td>{fila.indice + 1}</td>
+                    {COLUMNAS_PREVIEW.map((campo) => (
                       <td key={campo}>
-                        <input value={valores[fila.indice]?.[campo] ?? ''} onChange={(e) => editar(fila.indice, campo, e.target.value)} />
+                        <input
+                          aria-invalid={camposError.has(campo) || undefined}
+                          className={camposError.has(campo) ? 'celda-error' : undefined}
+                          value={valores[fila.indice]?.[campo] ?? ''}
+                          onChange={(e) => editar(fila.indice, campo, e.target.value)}
+                        />
                       </td>
                     ))}
                     <td>
