@@ -4,6 +4,7 @@ import { validarContrasena, validarCorreo, validarCurp, normalizarCorreo, valida
 import { desdeMexicoInput } from '../domain/fecha.js'
 import { vistaEstudio } from '../domain/roles.js'
 import { reportePeriodo as armarReporte } from '../domain/cobranza.js'
+import { armarRpcImportarEmpleados } from '../domain/ingestaEmpleados.js'
 
 function mal(mensaje) {
   return { ok: false, mensaje }
@@ -443,12 +444,12 @@ export function crearApiSupabase() {
     async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas }) {
       const permiso = exigir(await usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
-      const { data, error } = await supabase.rpc('importar_empleados', {
-        p_empresa_id: empresaId,
-        p_nombre_archivo: nombreArchivo,
-        p_sobrescribir: Boolean(sobrescribir),
-        p_filas: filas
-      })
+      const { data, error } = await supabase.rpc('importar_empleados', armarRpcImportarEmpleados({
+        empresaId,
+        nombreArchivo,
+        sobrescribir,
+        filas
+      }))
       if (error) return fallo(error)
       return bien(data)
     },
