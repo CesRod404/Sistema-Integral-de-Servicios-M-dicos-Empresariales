@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icono } from '../componentes/Iconos.jsx'
+import { ModalAgendarCita } from '../componentes/ModalAgendarCita.jsx'
 
 export function InicioPublico() {
   return (
@@ -13,7 +14,7 @@ export function InicioPublico() {
             citas, asistencia, expediente clínico y cobranza quedan en un solo sistema.
           </p>
           <div className="acciones">
-            <Link to="/login?cita=1" className="btn btn-naranja"><Icono nombre="citas" /> Agendar una cita</Link>
+            <ModalAgendarCita />
             <Link to="/servicios" className="btn btn-linea"><Icono nombre="documento" /> Conoce nuestros servicios</Link>
           </div>
         </div>

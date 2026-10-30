@@ -1,6 +1,7 @@
 // Página de inicio de DrakeJJ (José Eduardo Juárez Martínez).
 import { Link } from 'react-router-dom'
 import { Icono } from '../componentes/Iconos.jsx'
+import { ModalAgendarCita } from '../componentes/ModalAgendarCita.jsx'
 
 const PILARES = [
   ['pacientes', 'tono-azul', 'Atención integral', 'Todo el proceso médico en un solo sistema.'],
@@ -21,7 +22,7 @@ export default function Inicio() {
             la programación de citas, la atención médica, los estudios y el control de cuentas por empresa.
           </p>
           <div className="acciones">
-            <Link to="/login?cita=1" className="btn btn-naranja"><Icono nombre="citas" /> Agendar una cita</Link>
+            <ModalAgendarCita />
             <Link to="/servicios" className="btn btn-linea"><Icono nombre="documento" /> Conoce nuestros servicios</Link>
           </div>
         </div>
