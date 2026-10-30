@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
 import { Logo } from '../componentes/Iconos.jsx'
 import { Aviso, Boton, Campo } from '../componentes/Ui.jsx'
 
 export function Login() {
   const { usuario, entrar, modo } = useSesion()
-  const [params] = useSearchParams()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -27,7 +26,7 @@ export function Login() {
       setMensaje(resultado.mensaje)
       return
     }
-    const destino = params.get('cita') === '1' && resultado.usuario.rol === 'administrador' ? '/app/citas' : resultado.usuario.rol === 'doctor' ? '/app/pacientes' : '/app/inicio'
+    const destino = resultado.usuario.rol === 'doctor' ? '/app/pacientes' : '/app/inicio'
     navigate(destino, { replace: true })
   }
 

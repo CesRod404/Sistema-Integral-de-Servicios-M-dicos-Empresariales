@@ -101,6 +101,18 @@ export function crearApiSupabase() {
       return { ok: true, usuario: perfil }
     },
 
+    suscribirSesion(alCerrar) {
+      // US-ACC-01: si la sesión de Supabase termina (cierre en otra pestaña o token
+      // no renovable), se limpia el perfil en memoria y la app vuelve a /login.
+      const { data } = supabase.auth.onAuthStateChange((evento, sesion) => {
+        if (evento === 'SIGNED_OUT' || !sesion) {
+          cache = null
+          alCerrar()
+        }
+      })
+      return () => data.subscription.unsubscribe()
+    },
+
     async cerrarSesion() {
       await supabase.auth.signOut()
       cache = null

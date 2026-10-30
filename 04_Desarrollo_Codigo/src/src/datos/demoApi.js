@@ -82,6 +82,10 @@ export function crearApiDemo() {
   return {
     modo: 'demo',
 
+    suscribirSesion() {
+      return () => {}
+    },
+
     async obtenerSesion() {
       return bien(usuarioActual())
     },
