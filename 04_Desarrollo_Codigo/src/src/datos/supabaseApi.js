@@ -190,20 +190,26 @@ export function crearApiSupabase() {
     },
 
     async guardarEmpleado(datos) {
-      const permiso = exigir(await usuarioActual(), ['administrador'])
+      // S5-T14: el doctor también da de alta y edita pacientes (Project Plan §1:
+      // "El Doctor gestionará ... datos del paciente"). Requiere la migración
+      // 202610300001_pacientes_doctor.sql (RLS empleados_insert/empleados_update).
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const errores = validarEmpleado(datos)
       if (Object.keys(errores).length) return mal(Object.values(errores)[0])
+      // El formulario solo captura nombre, empresa y estado (SDD §4.1). Los campos
+      // opcionales que vienen de la importación de Excel solo se escriben si se
+      // envían, para no borrarlos al editar.
       const payload = {
         nombre: datos.nombre.trim(),
         empresa_id: datos.empresaId,
-        curp: validarCurp(datos.curp).valor,
-        clave_empleado: datos.claveEmpleado?.trim() || null,
-        email: datos.email ? normalizarCorreo(datos.email) : null,
-        telefono: normalizarTelefono(datos.telefono).valor,
-        edad: normalizarEdad(datos.edad).valor,
-        estado: datos.id ? datos.estado || 'activo' : 'provisional'
+        estado: datos.estado || (datos.id ? 'activo' : 'provisional')
       }
+      if ('curp' in datos) payload.curp = validarCurp(datos.curp).valor
+      if ('claveEmpleado' in datos) payload.clave_empleado = datos.claveEmpleado?.trim() || null
+      if ('email' in datos) payload.email = datos.email ? normalizarCorreo(datos.email) : null
+      if ('telefono' in datos) payload.telefono = normalizarTelefono(datos.telefono).valor
+      if ('edad' in datos) payload.edad = normalizarEdad(datos.edad).valor
       const consulta = datos.id
         ? supabase.from('empleados').update(payload).eq('id', datos.id).select('id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)').single()
         : supabase.from('empleados').insert(payload).select('id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)').single()
@@ -259,6 +265,16 @@ export function crearApiSupabase() {
       })
       if (error) return fallo(error)
       return bien(true)
+    },
+
+    async abrirAtencionDoctor(empleadoId) {
+      // S5-T14 / SRS RF-14: el doctor abre la atención del paciente para capturar
+      // el examen y adjuntar el PDF. RPC de la migración 202610300001.
+      const permiso = exigir(await usuarioActual(), ['doctor'])
+      if (permiso) return mal(permiso)
+      const { data, error } = await supabase.rpc('abrir_atencion_doctor', { p_empleado_id: empleadoId })
+      if (error) return fallo(error)
+      return bien({ citaId: data })
     },
 
     async registrarAsistencia(citaId, nuevoEstado) {
@@ -484,7 +500,8 @@ export function crearApiSupabase() {
     },
 
     async consultarPacientesAdmin() {
-      const permiso = exigir(await usuarioActual(), ['administrador'])
+      // S5-T14: Administrador y Doctor comparten la misma lista de pacientes.
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase.from('v_pacientes_admin').select('*').order('nombre')
       if (error) return fallo(error)
@@ -504,12 +521,13 @@ export function crearApiSupabase() {
         ultimaCita: fila.ultima_cita,
         estadoExpediente: fila.estado_expediente,
         fechaAtencion: fila.fecha_atencion,
-        estudiosNombres: fila.estudios_nombres || ''
+        estudiosNombres: fila.estudios_nombres || '',
+        fechaRegistro: fila.fecha_registro || null
       })))
     },
 
     async consultarVisitasAdmin(empleadoId) {
-      const permiso = exigir(await usuarioActual(), ['administrador'])
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase.from('v_visitas_admin').select('*').eq('empleado_id', empleadoId).order('fecha_hora', { ascending: false })
       if (error) return fallo(error)

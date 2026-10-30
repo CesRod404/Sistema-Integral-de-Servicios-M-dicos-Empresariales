@@ -9,8 +9,8 @@ import { ContactoPublico } from './paginas/ContactoPublico.jsx'
 import { Login } from './paginas/Login.jsx'
 import { Recuperar } from './paginas/Recuperar.jsx'
 import { PanelInicio } from './paginas/PanelInicio.jsx'
-import { PacientesDoctor } from './paginas/PacientesDoctor.jsx'
-import { FichaPaciente, PacientesAdmin } from './paginas/PacientesAdmin.jsx'
+import { Pacientes } from './paginas/Pacientes.jsx'
+import { FichaPaciente } from './paginas/PacientesAdmin.jsx'
 import { Atencion } from './paginas/Atencion.jsx'
 import { Citas } from './paginas/Citas.jsx'
 import { Empresas } from './paginas/Empresas.jsx'
@@ -45,8 +45,8 @@ export function App() {
       <Route path="/app" element={<RutaPrivada><LayoutApp /></RutaPrivada>}>
         <Route index element={<Navigate to={usuario?.rol === 'doctor' ? '/app/pacientes' : '/app/inicio'} replace />} />
         <Route path="inicio" element={<PanelInicio />} />
-        <Route path="pacientes" element={usuario?.rol === 'doctor' ? <PacientesDoctor /> : <PacientesAdmin />} />
-        <Route path="pacientes/:empleadoId" element={<Solo rol="administrador" ruta="/app/pacientes"><FichaPaciente /></Solo>} />
+        <Route path="pacientes" element={<Pacientes />} />
+        <Route path="pacientes/:empleadoId" element={<FichaPaciente />} />
         <Route path="atencion/:citaId" element={<Solo rol="doctor" ruta="/app/atencion"><Atencion /></Solo>} />
         <Route path="citas" element={<Citas />} />
         <Route path="empresas" element={<Solo rol="administrador" ruta="/app/empresas"><Empresas /></Solo>} />

@@ -226,29 +226,31 @@ export function crearApiDemo() {
     },
 
     async guardarEmpleado(datos) {
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      // S5-T14: mismo permiso que supabaseApi (Administrador y Doctor).
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const errores = validarEmpleado(datos)
       if (Object.keys(errores).length) return mal(Object.values(errores)[0])
       const estado = cargar()
       const empresa = estado.empresas.find((item) => item.id === datos.empresaId)
       if (!empresa) return mal('Seleccione la empresa del paciente.')
-      const curp = validarCurp(datos.curp).valor
+      // Los campos opcionales de la importación solo se escriben si se envían.
+      const opcionales = {}
+      if ('curp' in datos) opcionales.curp = validarCurp(datos.curp).valor
+      if ('claveEmpleado' in datos) opcionales.claveEmpleado = datos.claveEmpleado?.trim() || null
+      if ('email' in datos) opcionales.email = datos.email ? normalizarCorreo(datos.email) : null
+      if ('telefono' in datos) opcionales.telefono = normalizarTelefono(datos.telefono).valor
+      if ('edad' in datos) opcionales.edad = normalizarEdad(datos.edad).valor
+      const curp = opcionales.curp
       const ocupada = estado.empleados.find((item) => curp && item.curp === curp && item.id !== datos.id)
       if (ocupada) return mal('La CURP ya está registrada. Revise si el paciente es un duplicado.')
-      const telefono = normalizarTelefono(datos.telefono).valor
-      const edad = normalizarEdad(datos.edad).valor
       if (datos.id) {
         const actual = estado.empleados.find((item) => item.id === datos.id)
         if (!actual) return mal('El paciente no existe.')
         Object.assign(actual, {
           nombre: datos.nombre.trim(),
           empresaId: datos.empresaId,
-          curp,
-          claveEmpleado: datos.claveEmpleado?.trim() || null,
-          email: datos.email ? normalizarCorreo(datos.email) : null,
-          telefono,
-          edad,
+          ...opcionales,
           estado: datos.estado || actual.estado
         })
         guardar(estado)
@@ -259,12 +261,14 @@ export function crearApiDemo() {
         folio: folioSiguiente(estado.empleados, 'P'),
         empresaId: datos.empresaId,
         nombre: datos.nombre.trim(),
-        curp,
-        claveEmpleado: datos.claveEmpleado?.trim() || null,
-        email: datos.email ? normalizarCorreo(datos.email) : null,
-        telefono,
-        edad,
-        estado: 'provisional'
+        curp: null,
+        claveEmpleado: null,
+        email: null,
+        telefono: null,
+        edad: null,
+        ...opcionales,
+        estado: datos.estado || 'provisional',
+        fechaRegistro: new Date().toISOString()
       }
       estado.empleados.push(empleado)
       guardar(estado)
@@ -317,6 +321,36 @@ export function crearApiDemo() {
       estado.citas.push(cita)
       guardar(estado)
       return bien(vistaCita(estado, cita))
+    },
+
+    async abrirAtencionDoctor(empleadoId) {
+      // Réplica en memoria de la RPC abrir_atencion_doctor (migración 202610300001).
+      const permiso = exigir(usuarioActual(), ['doctor'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const empleado = estado.empleados.find((item) => item.id === empleadoId)
+      if (!empleado) return mal('El paciente no existe.')
+      if (empleado.estado === 'inactivo') return mal('El paciente está inactivo.')
+      const empresa = estado.empresas.find((item) => item.id === empleado.empresaId)
+      if (!empresa || empresa.estado !== 'activo') return mal('La empresa del paciente está inactiva.')
+      const abierta = estado.citas
+        .filter((cita) => cita.empleadoId === empleadoId && cita.estadoAsistencia === 'presente' && diaDeCita(cita.fechaHora) === hoyMexico())
+        .filter((cita) => {
+          const expediente = estado.expedientes.find((item) => item.citaId === cita.id)
+          return !expediente || expediente.estadoExpediente === 'abierto'
+        })
+        .sort((a, b) => b.fechaHora.localeCompare(a.fechaHora))[0]
+      if (abierta) return bien({ citaId: abierta.id })
+      const cita = {
+        id: crypto.randomUUID(),
+        empleadoId,
+        fechaHora: new Date().toISOString(),
+        estadoAsistencia: 'presente',
+        motivo: 'Atención registrada por el doctor'
+      }
+      estado.citas.push(cita)
+      guardar(estado)
+      return bien({ citaId: cita.id })
     },
 
     async registrarAsistencia(citaId, nuevoEstado) {
@@ -574,7 +608,8 @@ export function crearApiDemo() {
             email: valores.email,
             telefono: valores.telefono,
             edad: valores.edad,
-            estado: 'provisional'
+            estado: 'provisional',
+            fechaRegistro: new Date().toISOString()
           })
           insertados += 1
         }
@@ -604,7 +639,7 @@ export function crearApiDemo() {
     },
 
     async consultarPacientesAdmin() {
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
       const pacientes = estado.empleados.map((empleado) => {
@@ -627,7 +662,7 @@ export function crearApiDemo() {
     },
 
     async consultarVisitasAdmin(empleadoId) {
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
       const visitas = estado.citas
