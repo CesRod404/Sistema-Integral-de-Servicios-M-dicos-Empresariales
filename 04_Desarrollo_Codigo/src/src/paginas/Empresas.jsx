@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
 import { consolidarPorEmpresa, moneda } from '../domain/cobranza.js'
 import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
+import { plantillaExcelEmpresa } from '../domain/excelArchivo.js'
+import { nombreArchivoPlantilla } from '../domain/plantillaEmpresa.js'
+import { descargarXlsx } from '../componentes/descarga.js'
 import { Aviso, Badge, Boton, Campo, Modal } from '../componentes/Ui.jsx'
 
 const VACIO = { nombre: '', contacto: '', email: '', telefono: '', direccion: '', notas: '' }
@@ -61,6 +64,17 @@ export function Empresas() {
     }
   }
 
+  async function descargarPlantilla(empresa) {
+    // CRQ-004: plantilla propia de la empresa o, si no tiene, la predeterminada.
+    const plantilla = await api.obtenerPlantillaEmpresa(empresa.id)
+    if (!plantilla.ok) {
+      setError(plantilla.mensaje)
+      return
+    }
+    const buffer = await plantillaExcelEmpresa({ empresa, plantilla: plantilla.datos })
+    descargarXlsx(buffer, nombreArchivoPlantilla(empresa, plantilla.datos))
+  }
+
   const visibles = empresas.filter((empresa) => empresa.nombre.toLowerCase().includes(texto.toLowerCase()) || empresa.contacto.toLowerCase().includes(texto.toLowerCase()))
 
   return (
@@ -115,6 +129,7 @@ export function Empresas() {
                   <td className="acciones-tabla">
                     <Boton variante="linea" onClick={() => setForm(empresa)}>Editar</Boton>
                     {empresa.estado === 'activo' ? <Link className="btn btn-linea" to={`/app/empresas/${empresa.id}/plantilla`}>Plantilla Excel</Link> : null}
+                    {empresa.estado === 'activo' ? <Boton variante="texto" onClick={() => descargarPlantilla(empresa)}>Descargar plantilla</Boton> : null}
                     {empresa.estado === 'activo'
                       ? <Boton variante="peligro" onClick={() => setBaja(empresa)}>Dar de baja</Boton>
                       : <Boton variante="texto" onClick={() => reactivar(empresa)}>Reactivar</Boton>}

@@ -11,6 +11,7 @@ import {
   camposBaseDisponibles,
   editarCampo,
   moverCampo,
+  nombreArchivoPlantilla,
   ordenarColumnas,
   plantillaPredeterminada,
   puedeCambiarObligatorio,
@@ -18,6 +19,8 @@ import {
   quitarCampo,
   validarPlantilla
 } from '../domain/plantillaEmpresa.js'
+import { plantillaExcelEmpresa } from '../domain/excelArchivo.js'
+import { descargarXlsx } from '../componentes/descarga.js'
 import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 
 const NUEVO = { etiqueta: '', tipo: 'texto', obligatorio: false }
@@ -84,6 +87,11 @@ export function PlantillaEmpresa() {
     setMensaje(`Plantilla guardada. Versión vigente: ${resultado.datos.version}. Los archivos de versiones anteriores ya no se aceptan al importar.`)
   }
 
+  async function descargar() {
+    const buffer = await plantillaExcelEmpresa({ empresa, plantilla: vigente })
+    descargarXlsx(buffer, nombreArchivoPlantilla(empresa, vigente))
+  }
+
   if (cargando) return <p className="vacio">Cargando plantilla…</p>
   if (!empresa) {
     return (
@@ -110,6 +118,7 @@ export function PlantillaEmpresa() {
           </p>
         </div>
         <div className="acciones">
+          <Boton variante="naranja" onClick={descargar} title={sinCambios ? undefined : 'Se descarga la versión guardada'}>Descargar plantilla</Boton>
           <Link className="btn btn-linea" to="/app/empresas">Volver</Link>
         </div>
       </div>

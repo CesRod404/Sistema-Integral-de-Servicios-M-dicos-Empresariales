@@ -1,3 +1,8 @@
+import { encabezadoDe, ordenarColumnas, ETIQUETA_TIPO } from './plantillaEmpresa.js'
+
+export const HOJA_DATOS = 'Empleados'
+export const HOJA_META = '_sisme'
+
 async function crearLibro() {
   const modulo = await import('exceljs')
   const ExcelJS = modulo.default ?? modulo
@@ -49,5 +54,36 @@ export async function plantillaExcel() {
   const hoja = libro.addWorksheet('Empleados')
   hoja.addRow(['nombre_completo', 'curp', 'clave_empleado', 'email', 'telefono', 'edad'])
   hoja.addRow(['Juan Pérez García', 'PEGJ910322HZSRRN03', 'EMP-100', 'juan.perez@empresa.mx', '4921232255', 35])
+  return libro.xlsx.writeBuffer()
+}
+
+// CRQ-004 · descarga de la plantilla de una empresa: columnas en el orden
+// configurado, encabezados obligatorios marcados con «*» y hoja oculta «_sisme»
+// con la empresa y la versión para validar el archivo al importarlo.
+export async function plantillaExcelEmpresa({ empresa, plantilla }) {
+  if (!plantilla || !plantilla.version) return plantillaExcel()
+  const columnas = ordenarColumnas(plantilla.columnas)
+  const libro = await crearLibro()
+  libro.creator = 'SISME'
+  const hoja = libro.addWorksheet(HOJA_DATOS, { views: [{ state: 'frozen', ySplit: 1 }] })
+  hoja.columns = columnas.map((columna) => ({
+    header: encabezadoDe(columna),
+    key: columna.clave,
+    width: Math.max(14, Math.min(40, encabezadoDe(columna).length + 4))
+  }))
+  const encabezado = hoja.getRow(1)
+  encabezado.font = { bold: true }
+  columnas.forEach((columna, indice) => {
+    const celda = encabezado.getCell(indice + 1)
+    celda.note = `${ETIQUETA_TIPO[columna.tipo] || 'Texto'}${columna.obligatorio ? ' · obligatorio' : ' · opcional'}`
+    if (columna.obligatorio) {
+      celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1E2' } }
+    }
+  })
+  const meta = libro.addWorksheet(HOJA_META, { state: 'hidden' })
+  meta.addRow(['empresa_id', empresa?.id || plantilla.empresaId || ''])
+  meta.addRow(['empresa', empresa?.nombre || ''])
+  meta.addRow(['version', Number(plantilla.version)])
+  meta.addRow(['columnas', columnas.map((columna) => columna.clave).join(',')])
   return libro.xlsx.writeBuffer()
 }

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
 import { CAMPOS_IMPORTACION, MENSAJES_IMPORTACION } from '../domain/excelImport.js'
-import { plantillaExcel } from '../domain/excelArchivo.js'
+import { plantillaExcelEmpresa } from '../domain/excelArchivo.js'
+import { nombreArchivoPlantilla } from '../domain/plantillaEmpresa.js'
+import { descargarXlsx } from '../componentes/descarga.js'
 import { excelIngestionValidator } from '../domain/excelIngestionValidator.js'
 import { filasDesdeOperaciones, leerEmpleadosDesdeExcel } from '../domain/ingestaEmpleados.js'
 import { Aviso, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
@@ -116,14 +118,20 @@ export function Importacion() {
   }
 
   async function descargar() {
-    const buffer = await plantillaExcel()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const enlace = document.createElement('a')
-    enlace.href = url
-    enlace.download = 'plantilla_empleados_sisme.xlsx'
-    enlace.click()
-    URL.revokeObjectURL(url)
+    // CRQ-004: con empresa seleccionada se descarga su plantilla; sin empresa o
+    // sin plantilla propia, la predeterminada de siempre.
+    const empresa = empresas.find((item) => item.id === empresaId) || null
+    let plantilla = null
+    if (empresa) {
+      const respuesta = await api.obtenerPlantillaEmpresa(empresa.id)
+      if (!respuesta.ok) {
+        setError(respuesta.mensaje)
+        return
+      }
+      plantilla = respuesta.datos
+    }
+    const buffer = await plantillaExcelEmpresa({ empresa, plantilla })
+    descargarXlsx(buffer, empresa ? nombreArchivoPlantilla(empresa, plantilla) : 'plantilla_empleados_sisme.xlsx')
   }
 
   return (
