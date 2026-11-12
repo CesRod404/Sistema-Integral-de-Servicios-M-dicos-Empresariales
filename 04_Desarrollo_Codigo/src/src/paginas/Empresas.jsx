@@ -114,6 +114,7 @@ export function Empresas() {
                   <td><Badge tono={tonoEstado(cuenta?.estadoCuenta || 'al_corriente')}>{etiquetaEstado(cuenta?.estadoCuenta || 'al_corriente')}</Badge></td>
                   <td className="acciones-tabla">
                     <Boton variante="linea" onClick={() => setForm(empresa)}>Editar</Boton>
+                    {empresa.estado === 'activo' ? <Link className="btn btn-linea" to={`/app/empresas/${empresa.id}/plantilla`}>Plantilla Excel</Link> : null}
                     {empresa.estado === 'activo'
                       ? <Boton variante="peligro" onClick={() => setBaja(empresa)}>Dar de baja</Boton>
                       : <Boton variante="texto" onClick={() => reactivar(empresa)}>Reactivar</Boton>}

@@ -7,6 +7,7 @@ import { vistaEstudio, vistaExpediente } from '../domain/roles.js'
 import { validarCita, validarEmpleado, validarEmpresa, validarEstudio, validarPdf, normalizarCorreo, normalizarTelefono, validarCurp, normalizarEdad } from '../domain/validadores.js'
 import { desdeMexicoInput, hoyMexico } from '../domain/fecha.js'
 import { crearSemilla } from './semilla.js'
+import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
 
 const CLAVE = 'sisme.demo.v1'
 const CLAVE_SESION = 'sisme.demo.sesion'
@@ -626,6 +627,45 @@ export function crearApiDemo() {
       })
       guardar(estado)
       return bien({ insertados, actualizados, descartados })
+    },
+
+    async obtenerPlantillaEmpresa(empresaId) {
+      // CRQ-004: plantilla vigente de la empresa o null si usa la predeterminada.
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const vigente = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
+      return bien(vigente ? { ...vigente, columnas: vigente.columnas.map((columna) => ({ ...columna })) } : null)
+    },
+
+    async guardarPlantillaEmpresa(empresaId, columnas) {
+      const usuario = usuarioActual()
+      if (exigir(usuario, ['administrador'])) return mal(MENSAJES_PLANTILLA.PERMISO)
+      const estado = cargar()
+      const empresa = estado.empresas.find((item) => item.id === empresaId)
+      if (!empresa) return mal('La empresa no existe.')
+      if (empresa.estado !== 'activo') return mal('No se configura la plantilla de una empresa inactiva.')
+      const validacion = validarPlantilla(columnas)
+      if (!validacion.ok) return mal(validacion.errores[0])
+      estado.plantillas = estado.plantillas || []
+      const version = estado.plantillas
+        .filter((item) => item.empresaId === empresaId)
+        .reduce((maximo, item) => Math.max(maximo, item.version), 0) + 1
+      estado.plantillas.forEach((item) => {
+        if (item.empresaId === empresaId) item.activa = false
+      })
+      const plantilla = {
+        id: crypto.randomUUID(),
+        empresaId,
+        version,
+        columnas: validacion.columnas,
+        activa: true,
+        actualizadoPor: usuario.id,
+        actualizadoEn: new Date().toISOString()
+      }
+      estado.plantillas.push(plantilla)
+      guardar(estado)
+      return bien({ ...plantilla })
     },
 
     async listarImportaciones() {

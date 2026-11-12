@@ -14,6 +14,7 @@ import { FichaPaciente } from './paginas/PacientesAdmin.jsx'
 import { Atencion } from './paginas/Atencion.jsx'
 import { Citas } from './paginas/Citas.jsx'
 import { Empresas } from './paginas/Empresas.jsx'
+import { PlantillaEmpresa } from './paginas/PlantillaEmpresa.jsx'
 import { Importacion } from './paginas/Importacion.jsx'
 import { Cobranza } from './paginas/Cobranza.jsx'
 
@@ -50,6 +51,7 @@ export function App() {
         <Route path="atencion/:citaId" element={<Solo rol="doctor" ruta="/app/atencion"><Atencion /></Solo>} />
         <Route path="citas" element={<Citas />} />
         <Route path="empresas" element={<Solo rol="administrador" ruta="/app/empresas"><Empresas /></Solo>} />
+        <Route path="empresas/:empresaId/plantilla" element={<Solo rol="administrador" ruta="/app/empresas"><PlantillaEmpresa /></Solo>} />
         <Route path="importacion" element={<Solo rol="administrador" ruta="/app/importacion"><Importacion /></Solo>} />
         <Route path="cobranza" element={<Solo rol="administrador" ruta="/app/cobranza"><Cobranza /></Solo>} />
       </Route>

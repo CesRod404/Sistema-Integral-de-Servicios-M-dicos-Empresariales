@@ -117,6 +117,7 @@ export function crearSemilla() {
     pagos: [
       { id: uid(70), cargoId: uid(60), empresaId: uid(10), monto: 200, referencia: 'SPEI-DEMO-200', fecha: '2026-09-20' }
     ],
-    importaciones: []
+    importaciones: [],
+    plantillas: []
   }
 }
