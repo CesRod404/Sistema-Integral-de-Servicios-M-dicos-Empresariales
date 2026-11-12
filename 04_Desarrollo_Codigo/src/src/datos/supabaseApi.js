@@ -5,6 +5,7 @@ import { desdeMexicoInput } from '../domain/fecha.js'
 import { vistaEstudio } from '../domain/roles.js'
 import { reportePeriodo as armarReporte } from '../domain/cobranza.js'
 import { armarRpcImportarEmpleados } from '../domain/ingestaEmpleados.js'
+import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
 
 function mal(mensaje) {
   return { ok: false, mensaje }
@@ -48,6 +49,18 @@ function mapEmpresa(fila) {
     direccion: fila.direccion || '',
     notas: fila.notas || '',
     estado: fila.estado
+  }
+}
+
+function mapPlantilla(fila) {
+  if (!fila) return null
+  return {
+    id: fila.id,
+    empresaId: fila.empresa_id,
+    version: fila.version,
+    columnas: Array.isArray(fila.columnas) ? fila.columnas : [],
+    activa: fila.activa ?? true,
+    actualizadoEn: fila.updated_at || null
   }
 }
 
@@ -469,17 +482,50 @@ export function crearApiSupabase() {
       }))
     },
 
-    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas }) {
+    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas, plantillaVersion = null }) {
       const permiso = exigir(await usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase.rpc('importar_empleados', armarRpcImportarEmpleados({
         empresaId,
         nombreArchivo,
         sobrescribir,
-        filas
+        filas,
+        plantillaVersion
       }))
       if (error) return fallo(error)
       return bien(data)
+    },
+
+    async obtenerPlantillaEmpresa(empresaId) {
+      // CRQ-004: plantilla vigente de la empresa (tabla plantillas_empresa) o
+      // null si la empresa usa la plantilla predeterminada.
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const { data, error } = await supabase
+        .from('plantillas_empresa')
+        .select('id, empresa_id, version, columnas, activa, updated_at')
+        .eq('empresa_id', empresaId)
+        .eq('activa', true)
+        .maybeSingle()
+      if (error) {
+        // Mientras no se aplique 202611120001_plantillas_empresa.sql la tabla no
+        // existe: la importación sigue con la plantilla predeterminada.
+        if (/42P01|PGRST205|plantillas_empresa/.test(`${error.code || ''} ${error.message || ''}`)) return bien(null)
+        return fallo(error)
+      }
+      return bien(mapPlantilla(data))
+    },
+
+    async guardarPlantillaEmpresa(empresaId, columnas) {
+      if (exigir(await usuarioActual(), ['administrador'])) return mal(MENSAJES_PLANTILLA.PERMISO)
+      const validacion = validarPlantilla(columnas)
+      if (!validacion.ok) return mal(validacion.errores[0])
+      const { data, error } = await supabase.rpc('guardar_plantilla_empresa', {
+        p_empresa_id: empresaId,
+        p_columnas: validacion.columnas
+      })
+      if (error) return fallo(error)
+      return bien(mapPlantilla(data))
     },
 
     async listarImportaciones() {

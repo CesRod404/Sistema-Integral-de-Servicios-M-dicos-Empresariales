@@ -6,6 +6,7 @@ import {
   sugerirMapa,
   validarExtension
 } from './excelImport.js'
+import { aplicarPlantilla, revisarFilasConPlantilla, validarEstructura } from './importacionPlantilla.js'
 
 export class ExcelIngestionValidator {
   static ID = 'C-03'
@@ -29,8 +30,19 @@ export class ExcelIngestionValidator {
     return aplicarMapa(registros || [], mapa || {})
   }
 
-  vistaPrevia({ valores, existentes, empresaId, decisiones, sobrescribir } = {}) {
-    const filas = clasificarFilas(valores || [], existentes || [], empresaId).map((fila) => ({
+  // CRQ-004: estructura del archivo contra la plantilla de la empresa
+  // (empresa y versión de la hoja «_sisme», columnas faltantes o sobrantes).
+  validarEstructura({ plantilla, empresaId, encabezados, meta } = {}) {
+    return validarEstructura({ plantilla, empresaId, encabezados: encabezados || [], meta: meta || null })
+  }
+
+  aplicarPlantilla(registros, estructura) {
+    return aplicarPlantilla(registros || [], estructura)
+  }
+
+  vistaPrevia({ valores, existentes, empresaId, decisiones, sobrescribir, plantilla } = {}) {
+    const clasificadas = clasificarFilas(valores || [], existentes || [], empresaId)
+    const filas = revisarFilasConPlantilla(clasificadas, valores || [], plantilla).map((fila) => ({
       ...fila,
       marca: marcaDe(fila),
       camposConError: camposConError(fila)
@@ -51,7 +63,8 @@ function marcaDe(fila) {
 
 function camposConError(fila) {
   const campos = new Set(fila.errores.map((error) => error.campo))
-  if (fila.incompleta) campos.add('nombre')
+  if (fila.incompleta && !fila.valores.nombre) campos.add('nombre')
+  for (const campo of fila.camposFaltantes || []) campos.add(campo)
   return [...campos]
 }
 
