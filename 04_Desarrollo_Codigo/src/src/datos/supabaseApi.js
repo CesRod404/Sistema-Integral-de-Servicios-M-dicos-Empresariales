@@ -482,14 +482,15 @@ export function crearApiSupabase() {
       }))
     },
 
-    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas }) {
+    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas, plantillaVersion = null }) {
       const permiso = exigir(await usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase.rpc('importar_empleados', armarRpcImportarEmpleados({
         empresaId,
         nombreArchivo,
         sobrescribir,
-        filas
+        filas,
+        plantillaVersion
       }))
       if (error) return fallo(error)
       return bien(data)

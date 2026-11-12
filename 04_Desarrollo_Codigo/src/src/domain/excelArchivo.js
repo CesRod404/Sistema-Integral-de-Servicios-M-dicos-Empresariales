@@ -21,11 +21,30 @@ function valorCelda(celda) {
   return String(valor).trim()
 }
 
+function leerMeta(hoja) {
+  if (!hoja) return null
+  const datos = {}
+  hoja.eachRow((fila) => {
+    const clave = valorCelda(fila.getCell(1))
+    if (clave) datos[clave] = valorCelda(fila.getCell(2))
+  })
+  if (!datos.empresa_id && !datos.version) return null
+  return {
+    empresaId: datos.empresa_id || null,
+    empresa: datos.empresa || '',
+    version: Number(datos.version) || 0,
+    columnas: String(datos.columnas || '').split(',').map((item) => item.trim()).filter(Boolean)
+  }
+}
+
 export async function leerHoja(buffer) {
   const libro = await crearLibro()
   await libro.xlsx.load(buffer)
-  const hoja = libro.worksheets[0]
-  if (!hoja) return { encabezados: [], registros: [] }
+  // CRQ-004: la hoja de datos es la primera que no sea «_sisme»; «_sisme» trae
+  // la empresa y la versión de la plantilla descargada (si existe).
+  const hoja = libro.worksheets.find((item) => item.name !== HOJA_META)
+  const meta = leerMeta(libro.getWorksheet(HOJA_META))
+  if (!hoja) return { encabezados: [], registros: [], meta }
   const matriz = []
   hoja.eachRow({ includeEmpty: true }, (fila, numero) => {
     const valores = []
@@ -36,7 +55,7 @@ export async function leerHoja(buffer) {
     if (valores.some((item) => item !== '')) matriz[numero - 1] = valores
   })
   const compacta = matriz.filter(Boolean)
-  if (!compacta.length) return { encabezados: [], registros: [] }
+  if (!compacta.length) return { encabezados: [], registros: [], meta }
   const encabezados = compacta[0].map((celda) => String(celda ?? '').trim())
   const registros = compacta.slice(1).map((fila) => {
     const registro = {}
@@ -46,7 +65,7 @@ export async function leerHoja(buffer) {
     })
     return registro
   })
-  return { encabezados: encabezados.filter(Boolean), registros }
+  return { encabezados: encabezados.filter(Boolean), registros, meta }
 }
 
 export async function plantillaExcel() {

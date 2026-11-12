@@ -194,3 +194,264 @@ $$;
 
 revoke all on function public.guardar_plantilla_empresa(uuid, jsonb) from public, anon, authenticated;
 grant execute on function public.guardar_plantilla_empresa(uuid, jsonb) to authenticated;
+
+
+-- 4) Valores de columnas personalizadas en el empleado y versión usada en el lote.
+alter table public.empleados
+  add column if not exists datos_extra jsonb not null default '{}'::jsonb;
+
+do $$
+begin
+  alter table public.empleados
+    add constraint empleados_datos_extra_objeto check (jsonb_typeof(datos_extra) = 'object');
+exception
+  when duplicate_object then null;
+end $$;
+
+alter table public.importaciones
+  add column if not exists plantilla_version integer;
+
+-- 5) importar_empleados acepta datos_extra por fila y la versión de plantilla
+--    (p_plantilla_version, opcional). Misma lógica que la migración inicial más
+--    las reglas de CRQ-004. Se cambia la firma: se elimina la de 4 parámetros.
+drop function if exists public.importar_empleados(uuid, text, boolean, jsonb);
+
+create or replace function public.importar_empleados(
+  p_empresa_id uuid,
+  p_nombre_archivo text,
+  p_sobrescribir boolean,
+  p_filas jsonb,
+  p_plantilla_version integer default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_estado text;
+  r record;
+  v_existente uuid;
+  v_insertados integer := 0;
+  v_actualizados integer := 0;
+  v_descartados integer := 0;
+  v_total integer := 0;
+  v_edad integer;
+  v_telefono text;
+  v_plantilla public.plantillas_empresa%rowtype;
+  v_extra jsonb;
+  v_columna jsonb;
+  v_valor text;
+begin
+  if not public.es_admin() then
+    raise exception 'SISME: Solo el administrador puede importar empleados.';
+  end if;
+  select estado into v_estado from public.empresas where id = p_empresa_id;
+  if v_estado is null then
+    raise exception 'SISME: La empresa no existe.';
+  end if;
+  if v_estado <> 'activo' then
+    raise exception 'SISME: No se puede importar a una empresa inactiva.';
+  end if;
+  if p_filas is null or jsonb_typeof(p_filas) <> 'array' or jsonb_array_length(p_filas) = 0 then
+    raise exception 'SISME: El archivo no contiene registros para importar.';
+  end if;
+
+  -- CRQ-004: si la empresa tiene plantilla propia, el lote debe venir de su
+  -- versión vigente; sin plantilla propia se usa la predeterminada.
+  select * into v_plantilla from public.plantillas_empresa
+  where empresa_id = p_empresa_id and activa;
+  if v_plantilla.id is not null then
+    if p_plantilla_version is null or p_plantilla_version <> v_plantilla.version then
+      raise exception 'SISME: La plantilla de la empresa cambió (versión vigente: %). Descargue la plantilla vigente y vuelva a cargar el archivo.', v_plantilla.version;
+    end if;
+  elsif p_plantilla_version is not null then
+    raise exception 'SISME: La versión de plantilla del archivo no existe para esta empresa. Descargue la plantilla vigente.';
+  end if;
+
+  if exists (
+    select 1 from (
+      select nullif(upper(btrim(coalesce(value->>'curp', ''))), '') as curp,
+             coalesce(value->>'accion', 'insertar') as accion
+      from jsonb_array_elements(p_filas)
+    ) f
+    where accion <> 'descartar' and curp is not null
+    group by curp having count(*) > 1
+  ) then
+    raise exception 'SISME: Hay duplicados dentro del archivo. Conserve un solo registro de cada grupo y descarte el resto.';
+  end if;
+
+  if exists (
+    select 1 from (
+      select nullif(btrim(coalesce(value->>'clave_empleado', '')), '') as clave,
+             coalesce(value->>'accion', 'insertar') as accion,
+             nullif(upper(btrim(coalesce(value->>'curp', ''))), '') as curp
+      from jsonb_array_elements(p_filas)
+    ) f
+    where accion <> 'descartar' and curp is null and clave is not null
+    group by clave having count(*) > 1
+  ) then
+    raise exception 'SISME: Hay duplicados dentro del archivo. Conserve un solo registro de cada grupo y descarte el resto.';
+  end if;
+
+  if exists (
+    select 1 from (
+      select public.fn_normalizar_nombre(value->>'nombre') as nombre,
+             coalesce(value->>'accion', 'insertar') as accion,
+             nullif(upper(btrim(coalesce(value->>'curp', ''))), '') as curp,
+             nullif(btrim(coalesce(value->>'clave_empleado', '')), '') as clave
+      from jsonb_array_elements(p_filas)
+    ) f
+    where accion <> 'descartar' and curp is null and clave is null and nombre <> ''
+    group by nombre having count(*) > 1
+  ) then
+    raise exception 'SISME: Hay duplicados dentro del archivo. Conserve un solo registro de cada grupo y descarte el resto.';
+  end if;
+
+  for r in
+    select
+      coalesce(value->>'accion', 'insertar') as accion,
+      btrim(coalesce(value->>'nombre', '')) as nombre,
+      nullif(upper(regexp_replace(coalesce(value->>'curp', ''), '\s', '', 'g')), '') as curp,
+      nullif(btrim(coalesce(value->>'clave_empleado', '')), '') as clave,
+      nullif(lower(btrim(coalesce(value->>'email', ''))), '') as email,
+      nullif(btrim(coalesce(value->>'telefono', '')), '') as telefono,
+      nullif(btrim(coalesce(value->>'edad', '')), '') as edad_txt,
+      coalesce(value->'datos_extra', '{}'::jsonb) as datos_extra
+    from jsonb_array_elements(p_filas)
+  loop
+    v_total := v_total + 1;
+    if r.accion = 'descartar' then
+      v_descartados := v_descartados + 1;
+      continue;
+    end if;
+    if r.nombre = '' then
+      raise exception 'SISME: Hay registros incompletos. La importación no se confirmó.';
+    end if;
+    if r.curp is not null and r.curp !~ '^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[A-Z0-9][0-9]$' then
+      raise exception 'SISME: Hay datos con formato inválido. La importación no se confirmó.';
+    end if;
+    if r.email is not null and r.email !~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+      raise exception 'SISME: Hay datos con formato inválido. La importación no se confirmó.';
+    end if;
+    v_telefono := null;
+    if r.telefono is not null then
+      v_telefono := regexp_replace(r.telefono, '\D', '', 'g');
+      if length(v_telefono) = 12 and left(v_telefono, 2) = '52' then
+        v_telefono := substring(v_telefono from 3);
+      end if;
+      if length(v_telefono) <> 10 then
+        raise exception 'SISME: Hay datos con formato inválido. La importación no se confirmó.';
+      end if;
+    end if;
+    v_edad := null;
+    if r.edad_txt is not null then
+      if r.edad_txt !~ '^[0-9]+$' or r.edad_txt::int > 120 then
+        raise exception 'SISME: Hay datos con formato inválido. La importación no se confirmó.';
+      end if;
+      v_edad := r.edad_txt::int;
+    end if;
+
+    -- CRQ-004: columnas personalizadas. Solo claves de la plantilla vigente,
+    -- obligatorias con valor y tipo correcto. Sin plantilla, no se aceptan.
+    if jsonb_typeof(r.datos_extra) <> 'object' then
+      raise exception 'SISME: Hay datos con formato inválido. La importación no se confirmó.';
+    end if;
+    v_extra := '{}'::jsonb;
+    if v_plantilla.id is null then
+      if r.datos_extra <> '{}'::jsonb then
+        raise exception 'SISME: El lote trae columnas que no están en la plantilla de la empresa.';
+      end if;
+    else
+      if exists (
+        select 1 from jsonb_object_keys(r.datos_extra) k
+        where not exists (
+          select 1 from jsonb_array_elements(v_plantilla.columnas) c
+          where c->>'clave' = k and coalesce((c->>'personalizado')::boolean, false)
+        )
+      ) then
+        raise exception 'SISME: El lote trae columnas que no están en la plantilla de la empresa.';
+      end if;
+      for v_columna in
+        select c from jsonb_array_elements(v_plantilla.columnas) c
+        where coalesce((c->>'personalizado')::boolean, false)
+      loop
+        v_valor := nullif(btrim(coalesce(r.datos_extra->>(v_columna->>'clave'), '')), '');
+        if v_valor is null then
+          if coalesce((v_columna->>'obligatorio')::boolean, false) then
+            raise exception 'SISME: Hay registros incompletos. La importación no se confirmó.';
+          end if;
+          continue;
+        end if;
+        if (v_columna->>'tipo' = 'numero' and v_valor !~ '^-?[0-9]+(\.[0-9]+)?$')
+          or (v_columna->>'tipo' = 'fecha' and v_valor !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          or (v_columna->>'tipo' = 'email' and v_valor !~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$')
+          or (v_columna->>'tipo' = 'texto' and length(v_valor) > 250) then
+          raise exception 'SISME: Hay datos con formato inválido. La importación no se confirmó.';
+        end if;
+        v_extra := v_extra || jsonb_build_object(
+          v_columna->>'clave',
+          case when v_columna->>'tipo' = 'numero' then to_jsonb(v_valor::numeric) else to_jsonb(v_valor) end
+        );
+      end loop;
+    end if;
+
+    v_existente := null;
+    if r.curp is not null then
+      select id into v_existente from public.empleados where curp = r.curp limit 1;
+    end if;
+    if v_existente is null and r.clave is not null then
+      select id into v_existente from public.empleados
+      where empresa_id = p_empresa_id and clave_empleado = r.clave
+        and (curp is null or r.curp is null or curp = r.curp)
+      limit 1;
+    end if;
+    if v_existente is null then
+      select id into v_existente from public.empleados
+      where empresa_id = p_empresa_id
+        and public.fn_normalizar_nombre(nombre) = public.fn_normalizar_nombre(r.nombre)
+        and (curp is null or r.curp is null or curp = r.curp)
+      limit 1;
+    end if;
+
+    if r.accion = 'actualizar' then
+      if not coalesce(p_sobrescribir, false) then
+        raise exception 'SISME: La actualización de registros existentes requiere su confirmación explícita.';
+      end if;
+      if v_existente is null then
+        raise exception 'SISME: No se encontró el registro a actualizar.';
+      end if;
+      update public.empleados
+        set nombre = r.nombre,
+            curp = coalesce(r.curp, curp),
+            clave_empleado = coalesce(r.clave, clave_empleado),
+            email = coalesce(r.email, email),
+            telefono = coalesce(v_telefono, telefono),
+            edad = coalesce(v_edad, edad),
+            datos_extra = coalesce(datos_extra, '{}'::jsonb) || v_extra,
+            updated_at = now()
+        where id = v_existente;
+      v_actualizados := v_actualizados + 1;
+    else
+      if v_existente is not null then
+        raise exception 'SISME: Hay duplicados sin decisión. La importación no se confirmó.';
+      end if;
+      insert into public.empleados (empresa_id, nombre, curp, clave_empleado, email, telefono, edad, datos_extra, estado)
+      values (p_empresa_id, r.nombre, r.curp, r.clave, r.email, v_telefono, v_edad, v_extra, 'provisional');
+      v_insertados := v_insertados + 1;
+    end if;
+  end loop;
+
+  insert into public.importaciones (empresa_id, administrador_id, nombre_archivo, total_filas, insertados, actualizados, descartados, plantilla_version)
+  values (p_empresa_id, auth.uid(), left(coalesce(p_nombre_archivo, 'lista.xlsx'), 180), v_total, v_insertados, v_actualizados, v_descartados, v_plantilla.version);
+
+  return jsonb_build_object(
+    'insertados', v_insertados,
+    'actualizados', v_actualizados,
+    'descartados', v_descartados
+  );
+end;
+$$;
+
+
+revoke all on function public.importar_empleados(uuid, text, boolean, jsonb, integer) from public, anon, authenticated;
+grant execute on function public.importar_empleados(uuid, text, boolean, jsonb, integer) to authenticated;

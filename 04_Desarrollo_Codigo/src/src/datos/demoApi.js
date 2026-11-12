@@ -554,7 +554,7 @@ export function crearApiDemo() {
       return bien(reportePeriodo({ empresas: estado.empresas, cargos: estado.cargos, pagos: estado.pagos, desde, hasta }))
     },
 
-    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas }) {
+    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas, plantillaVersion = null }) {
       const usuario = usuarioActual()
       const permiso = exigir(usuario, ['administrador'])
       if (permiso) return mal(permiso)
@@ -562,6 +562,13 @@ export function crearApiDemo() {
       const empresa = estado.empresas.find((item) => item.id === empresaId)
       if (!empresa || empresa.estado !== 'activo') return mal('Seleccione una empresa activa.')
       if (!Array.isArray(filas) || !filas.length) return mal('El archivo no contiene registros para importar.')
+      // CRQ-004: misma regla que importar_empleados en Supabase.
+      const plantilla = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
+      if (plantilla && Number(plantillaVersion) !== plantilla.version) {
+        return mal(`La plantilla de la empresa cambió (versión vigente: ${plantilla.version}). Descargue la plantilla vigente y vuelva a cargar el archivo.`)
+      }
+      if (!plantilla && plantillaVersion) return mal('La versión de plantilla del archivo no existe para esta empresa. Descargue la plantilla vigente.')
+      const personalizadas = new Set((plantilla?.columnas || []).filter((columna) => columna.personalizado).map((columna) => columna.clave))
       const claves = new Map()
       let insertados = 0
       let actualizados = 0
@@ -578,9 +585,13 @@ export function crearApiDemo() {
           email: fila.email || null,
           telefono: fila.telefono || null,
           edad: fila.edad ?? null,
+          datosExtra: fila.datos_extra || {},
           empresaId
         }
         if (!valores.nombre) return mal('Hay registros incompletos. La importación no se confirmó.')
+        if (Object.keys(valores.datosExtra).some((clave) => !personalizadas.has(clave))) {
+          return mal('El lote trae columnas que no están en la plantilla de la empresa.')
+        }
         const clave = valores.curp ? `curp:${valores.curp}` : valores.claveEmpleado ? `clave:${valores.claveEmpleado}` : `nombre:${valores.nombre.toLowerCase()}`
         claves.set(clave, (claves.get(clave) || 0) + 1)
         if (claves.get(clave) > 1) return mal('Hay duplicados dentro del archivo. Conserve un solo registro de cada grupo y descarte el resto.')
@@ -595,6 +606,7 @@ export function crearApiDemo() {
           actual.email = valores.email || actual.email
           actual.telefono = valores.telefono || actual.telefono
           actual.edad = valores.edad ?? actual.edad
+          actual.datosExtra = { ...(actual.datosExtra || {}), ...valores.datosExtra }
           actualizados += 1
         } else if (duplicado) {
           return mal('Hay duplicados sin decisión. La importación no se confirmó.')
@@ -609,6 +621,7 @@ export function crearApiDemo() {
             email: valores.email,
             telefono: valores.telefono,
             edad: valores.edad,
+            datosExtra: valores.datosExtra,
             estado: 'provisional',
             fechaRegistro: new Date().toISOString()
           })
@@ -623,6 +636,7 @@ export function crearApiDemo() {
         insertados,
         actualizados,
         descartados,
+        plantillaVersion: plantilla ? plantilla.version : null,
         fecha: new Date().toISOString()
       })
       guardar(estado)

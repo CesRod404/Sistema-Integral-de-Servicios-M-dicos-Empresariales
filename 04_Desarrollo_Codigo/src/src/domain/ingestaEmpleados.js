@@ -16,7 +16,8 @@ export async function leerEmpleadosDesdeExcel(archivo) {
       ok: true,
       nombreArchivo: archivo.name,
       encabezados: hoja.encabezados,
-      registros: hoja.registros
+      registros: hoja.registros,
+      meta: hoja.meta || null
     }
   } catch {
     return { ok: false, mensaje: MENSAJE_LECTURA, encabezados: [], registros: [] }
@@ -26,7 +27,7 @@ export async function leerEmpleadosDesdeExcel(archivo) {
 export function filasDesdeOperaciones(operaciones) {
   return (operaciones || []).map((item) => {
     const valores = item.valores || item
-    return {
+    const fila = {
       accion: item.accion || 'insertar',
       nombre: valores.nombre ?? '',
       curp: valores.curp ?? null,
@@ -35,14 +36,22 @@ export function filasDesdeOperaciones(operaciones) {
       telefono: valores.telefono ?? null,
       edad: valores.edad ?? null
     }
+    // CRQ-004: valores de las columnas personalizadas de la plantilla.
+    const datosExtra = valores.datosExtra ?? valores.datos_extra
+    if (datosExtra && Object.keys(datosExtra).length) fila.datos_extra = datosExtra
+    return fila
   })
 }
 
-export function armarRpcImportarEmpleados({ empresaId, nombreArchivo, sobrescribir, filas }) {
-  return {
+export function armarRpcImportarEmpleados({ empresaId, nombreArchivo, sobrescribir, filas, plantillaVersion }) {
+  const rpc = {
     p_empresa_id: empresaId,
     p_nombre_archivo: nombreArchivo || 'lista.xlsx',
     p_sobrescribir: Boolean(sobrescribir),
     p_filas: filasDesdeOperaciones(filas)
   }
+  // CRQ-004: versión de la plantilla con la que se validó el archivo. La base de
+  // datos rechaza el lote si ya no es la vigente de la empresa.
+  if (plantillaVersion != null) rpc.p_plantilla_version = Number(plantillaVersion)
+  return rpc
 }

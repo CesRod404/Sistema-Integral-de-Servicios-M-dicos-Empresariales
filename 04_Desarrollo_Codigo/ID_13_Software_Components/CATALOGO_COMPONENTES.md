@@ -17,6 +17,7 @@ Versión de trabajo de la primera entrega ejecutable. El código vive en `04_Des
 | Clínica | `src/domain/clinica.js` | Asistencia, cancelación, cierre y columna del tablero |
 | Cobranza | `src/domain/cobranza.js` | Cargo con precio histórico, pago, consolidado y resumen de periodo |
 | Importación | `src/domain/excelImport.js`, `src/domain/excelArchivo.js`, `src/domain/ingestaEmpleados.js`, `src/domain/excelIngestionValidator.js` | Lectura ExcelJS, lote de `importar_empleados` y C-03 `ExcelIngestionValidator` (vista previa, columnas, formatos y duplicados) |
+| Plantilla por empresa (CRQ-004) | `src/domain/plantillaEmpresa.js`, `src/domain/importacionPlantilla.js`, `src/domain/excelArchivo.js` (`plantillaExcelEmpresa`, hoja `_sisme`) | Configuración versionada de columnas por empresa (base y personalizadas, orden, obligatoriedad, tipo), descarga .xlsx y validación de la reimportación dentro de C-03 (empresa, versión, columnas, obligatorios y tipos) |
 | Fechas y errores | `src/domain/fecha.js`, `src/domain/errores.js` | Zona `America/Mexico_City` y mensajes en español |
 | Interfaz | `src/componentes`, `src/paginas`, `src/estilos.css` | Pantallas en español |
 
@@ -32,17 +33,18 @@ Versión de trabajo de la primera entrega ejecutable. El código vive en `04_Des
 | `/app/pacientes` y `/app/pacientes/:id` | Administrador | Consulta y datos de contacto. Visitas sin diagnóstico ni PDF |
 | `/app/citas` | Ambos; escritura solo Administrador | US-CLI-01, US-CLI-02 |
 | `/app/empresas` | Administrador | US-EMP-01, US-EMP-02, US-EMP-03 |
-| `/app/importacion` | Administrador | US-IMP-01 a US-IMP-05 |
+| `/app/empresas/:empresaId/plantilla` | Administrador | US-IMP-07 (CRQ-004): configurar y descargar la plantilla Excel de la empresa |
+| `/app/importacion` | Administrador | US-IMP-01 a US-IMP-05 y US-IMP-07 (validación con la plantilla de la empresa) |
 | `/app/cobranza` | Administrador | US-COB-01 a US-COB-04 y resumen de periodo marcado pendiente |
 
 No existen rutas de Reportes ni de Configuración. Esas direcciones se rechazan.
 
 ## Base de datos
 
-Tablas: `perfiles`, `empresas`, `empleados`, `citas`, `expedientes_clinicos`, `catalogo_estudios`, `estudios_realizados`, `expediente_archivos`, `cargos_detalle`, `pagos`, `importaciones`.
+Tablas: `perfiles`, `empresas`, `empleados`, `citas`, `expedientes_clinicos`, `catalogo_estudios`, `estudios_realizados`, `expediente_archivos`, `cargos_detalle`, `pagos`, `importaciones`, `plantillas_empresa` (CRQ-004). `empleados.datos_extra` guarda los valores de columnas personalizadas e `importaciones.plantilla_version` la versión usada.
 
 Vistas: `v_estudios_nombres`, `v_pacientes_admin`, `v_visitas_admin`.
 
-Funciones de negocio: `estado_acceso`, `registrar_intento_fallido`, `registrar_acceso_exitoso`, `programar_cita`, `registrar_asistencia`, `cancelar_cita`, `guardar_atencion`, `cerrar_expediente`, `registrar_archivo_pdf`, `registrar_pago`, `importar_empleados`.
+Funciones de negocio: `estado_acceso`, `registrar_intento_fallido`, `registrar_acceso_exitoso`, `programar_cita`, `registrar_asistencia`, `cancelar_cita`, `guardar_atencion`, `cerrar_expediente`, `registrar_archivo_pdf`, `registrar_pago`, `importar_empleados` (con `p_plantilla_version` opcional desde CRQ-004), `guardar_plantilla_empresa`.
 
 Almacén: bucket privado `expedientes_medicos`.
