@@ -6,7 +6,7 @@ import { vistaEstudio } from '../domain/roles.js'
 import { reportePeriodo as armarReporte } from '../domain/cobranza.js'
 import { armarRpcImportarEmpleados } from '../domain/ingestaEmpleados.js'
 import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
-import { datosContactoEmpresa, prepararEdicionEmpresa } from '../domain/empresas.js'
+import { datosContactoEmpresa, prepararEdicionEmpresa, validarCambioEstadoEmpresa } from '../domain/empresas.js'
 
 function mal(mensaje) {
   return { ok: false, mensaje }
@@ -199,7 +199,13 @@ export function crearApiSupabase() {
     async cambiarEstadoEmpresa(id, nuevoEstado) {
       const permiso = exigir(await usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
-      const { data, error } = await supabase.from('empresas').update({ estado: nuevoEstado }).eq('id', id).select().single()
+      // US-EMP-03 / RF-06: baja lógica. Solo cambia el estado; el borrado físico
+      // lo impide trg_empresas_no_delete y el historial queda intacto.
+      const vigente = await supabase.from('empresas').select('id, estado').eq('id', id).maybeSingle()
+      if (vigente.error) return fallo(vigente.error)
+      const invalido = validarCambioEstadoEmpresa(vigente.data, nuevoEstado)
+      if (invalido) return mal(invalido)
+      const { data, error } = await supabase.from('empresas').update({ estado: nuevoEstado }).eq('id', id).select(COLUMNAS_EMPRESA).single()
       if (error) return fallo(error)
       return bien(mapEmpresa(data))
     },
