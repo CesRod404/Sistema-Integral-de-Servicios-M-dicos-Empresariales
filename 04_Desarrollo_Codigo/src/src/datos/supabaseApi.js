@@ -6,6 +6,7 @@ import { vistaEstudio } from '../domain/roles.js'
 import { reportePeriodo as armarReporte } from '../domain/cobranza.js'
 import { armarRpcImportarEmpleados } from '../domain/ingestaEmpleados.js'
 import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { datosContactoEmpresa, prepararEdicionEmpresa } from '../domain/empresas.js'
 
 function mal(mensaje) {
   return { ok: false, mensaje }
@@ -15,6 +16,14 @@ function bien(datos) {
 }
 function fallo(error) {
   return mal(mensajeAmigable(error))
+}
+
+const COLUMNAS_EMPRESA = 'id, folio, nombre, contacto, email, telefono, direccion, notas, estado'
+
+// Índice único empresas_nombre_unico (lower(nombre)): mismo mensaje que el modo demo.
+function falloEmpresa(error) {
+  if (error?.code === '23505') return mal('Ya existe una empresa con ese nombre.')
+  return fallo(error)
 }
 
 let cache = null
@@ -170,19 +179,20 @@ export function crearApiSupabase() {
       if (permiso) return mal(permiso)
       const errores = validarEmpresa(datos)
       if (Object.keys(errores).length) return mal(Object.values(errores)[0])
-      const payload = {
-        nombre: datos.nombre.trim(),
-        contacto: datos.contacto.trim(),
-        email: normalizarCorreo(datos.email),
-        telefono: normalizarTelefono(datos.telefono).valor,
-        direccion: datos.direccion?.trim() || null,
-        notas: datos.notas?.trim() || null
+      if (datos.id) {
+        // US-EMP-02 / RF-05: se leen los datos vigentes y solo se actualizan los
+        // campos que cambiaron; updated_at lo pone trg_empresas_updated_at.
+        const vigente = await supabase.from('empresas').select(COLUMNAS_EMPRESA).eq('id', datos.id).maybeSingle()
+        if (vigente.error) return fallo(vigente.error)
+        const edicion = prepararEdicionEmpresa(vigente.data ? mapEmpresa(vigente.data) : null, datos)
+        if (!edicion.ok) return mal(edicion.mensaje)
+        if (!edicion.campos.length) return { ok: true, datos: mapEmpresa(vigente.data), sinCambios: true }
+        const { data, error } = await supabase.from('empresas').update(edicion.cambios).eq('id', datos.id).select(COLUMNAS_EMPRESA).single()
+        if (error) return falloEmpresa(error)
+        return bien(mapEmpresa(data))
       }
-      const consulta = datos.id
-        ? supabase.from('empresas').update(payload).eq('id', datos.id).select().single()
-        : supabase.from('empresas').insert(payload).select().single()
-      const { data, error } = await consulta
-      if (error) return fallo(error)
+      const { data, error } = await supabase.from('empresas').insert(datosContactoEmpresa(datos)).select().single()
+      if (error) return falloEmpresa(error)
       return bien(mapEmpresa(data))
     },
 

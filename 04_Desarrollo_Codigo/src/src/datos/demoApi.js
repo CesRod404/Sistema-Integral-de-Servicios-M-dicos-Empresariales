@@ -8,6 +8,7 @@ import { validarCita, validarEmpleado, validarEmpresa, validarEstudio, validarPd
 import { desdeMexicoInput, hoyMexico } from '../domain/fecha.js'
 import { crearSemilla } from './semilla.js'
 import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { prepararEdicionEmpresa } from '../domain/empresas.js'
 
 const CLAVE = 'sisme.demo.v1'
 const CLAVE_SESION = 'sisme.demo.sesion'
@@ -177,16 +178,12 @@ export function crearApiDemo() {
       )
       if (duplicada) return mal('Ya existe una empresa con ese nombre.')
       if (datos.id) {
+        // US-EMP-02 / RF-05: solo cambian los campos de contacto modificados.
         const actual = estado.empresas.find((empresa) => empresa.id === datos.id)
-        if (!actual) return mal('La empresa no existe.')
-        Object.assign(actual, {
-          nombre: datos.nombre.trim(),
-          contacto: datos.contacto.trim(),
-          email: normalizarCorreo(datos.email),
-          telefono,
-          direccion: datos.direccion?.trim() || '',
-          notas: datos.notas?.trim() || ''
-        })
+        const edicion = prepararEdicionEmpresa(actual, datos)
+        if (!edicion.ok) return mal(edicion.mensaje)
+        if (!edicion.campos.length) return { ok: true, datos: actual, sinCambios: true }
+        for (const campo of edicion.campos) actual[campo] = edicion.cambios[campo] ?? ''
         guardar(estado)
         return bien(actual)
       }
