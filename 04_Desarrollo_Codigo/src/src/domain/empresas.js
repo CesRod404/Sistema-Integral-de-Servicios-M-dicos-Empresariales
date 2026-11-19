@@ -1,4 +1,5 @@
-// Empresas cliente: edición de datos de contacto (US-EMP-02, RF-05).
+// Empresas cliente: edición de datos de contacto (US-EMP-02, RF-05) y
+// consulta y baja lógica (US-EMP-03, RF-06).
 // Reglas puras compartidas por demoApi y supabaseApi.
 import { normalizarCorreo, normalizarTelefono, validarEmpresa } from './validadores.js'
 
@@ -41,4 +42,40 @@ export function prepararEdicionEmpresa(actual, datos) {
   const nuevos = datosContactoEmpresa(datos)
   const cambios = Object.fromEntries(campos.map((campo) => [campo, nuevos[campo]]))
   return { ok: true, campos, cambios }
+}
+
+// US-EMP-03 / RF-06: consulta con filtro por estado y por texto.
+export const ESTADOS_EMPRESA = ['activo', 'inactivo']
+export const FILTROS_ESTADO_EMPRESA = [
+  { valor: 'todas', etiqueta: 'Todas' },
+  { valor: 'activo', etiqueta: 'Activas' },
+  { valor: 'inactivo', etiqueta: 'Inactivas' }
+]
+
+function comparable(valor) {
+  return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+}
+
+export function filtrarEmpresas(empresas, { texto = '', estado = 'todas' } = {}) {
+  const buscado = comparable(texto)
+  return (empresas || []).filter((empresa) => {
+    if (estado !== 'todas' && empresa.estado !== estado) return false
+    if (!buscado) return true
+    return [empresa.folio, empresa.nombre, empresa.contacto, empresa.email, empresa.telefono].some((valor) => comparable(valor).includes(buscado))
+  })
+}
+
+export function resumenEmpresas(empresas) {
+  const lista = empresas || []
+  const activas = lista.filter((empresa) => empresa.estado === 'activo').length
+  return { total: lista.length, activas, inactivas: lista.length - activas }
+}
+
+// Baja lógica: solo cambia el estado; la fila y su historial (citas,
+// expedientes, cargos y pagos) se conservan y la base impide el borrado físico.
+export function validarCambioEstadoEmpresa(empresa, nuevoEstado) {
+  if (!ESTADOS_EMPRESA.includes(nuevoEstado)) return 'El estado de la empresa no es válido.'
+  if (!empresa) return 'La empresa no existe.'
+  if (empresa.estado === nuevoEstado) return nuevoEstado === 'inactivo' ? 'La empresa ya está dada de baja.' : 'La empresa ya está activa.'
+  return null
 }

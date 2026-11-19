@@ -223,3 +223,6 @@ tr.valido { background: white; }
     grid-template-columns: 1fr;
   }
 }
+.detalle-empresa { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0 0 12px; }
+.detalle-empresa dt { font-weight: 800; color: var(--navy); }
+.detalle-empresa dd { margin: 0; }
