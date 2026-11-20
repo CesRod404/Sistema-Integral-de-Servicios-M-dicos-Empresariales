@@ -28,10 +28,11 @@ a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 h1, h2, h3, p { margin: 0; }
 
-.logo { display: flex; gap: 10px; align-items: center; }
+.logo { display: flex; gap: 12px; align-items: center; }
 .logo strong { display: block; color: var(--navy); font-size: 1.45rem; letter-spacing: 0.04em; line-height: 1; }
 .logo small { display: block; max-width: 210px; color: var(--navy-2); font-size: 0.68rem; line-height: 1.2; }
-.logo-marca { width: 46px; height: 46px; }
+.logo-marca { width: 48px; height: 48px; flex-shrink: 0; object-fit: contain; }
+.logo-compacto .logo-marca { width: 40px; height: 40px; }
 .logo-compacto small { display: none; }
 
 .barra-publica {
