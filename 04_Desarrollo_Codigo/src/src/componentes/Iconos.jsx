@@ -31,13 +31,7 @@ export function Icono({ nombre, tamano = 20 }) {
 export function Logo({ compacto = false }) {
   return (
     <div className={`logo ${compacto ? 'logo-compacto' : ''}`}>
-      <svg className="logo-marca" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="24" cy="34" r="16" fill="#eef3f8" stroke="#1f4e89" strokeWidth="2" />
-        <circle cx="40" cy="30" r="14" fill="#fff7ec" stroke="#f28c28" strokeWidth="2" />
-        <path d="M24 26v16M18 32h12" stroke="#1f4e89" strokeWidth="2.4" strokeLinecap="round" />
-        <path d="M40 24c2 3 2 8 0 12" stroke="#2f9e6b" strokeWidth="2" fill="none" />
-        <circle cx="40" cy="22" r="2" fill="#2f9e6b" />
-      </svg>
+      <img className="logo-marca" src="/logo-sisme.png" alt="Logo de SISME" width="48" height="48" decoding="async" />
       <div>
         <strong>SISME</strong>
         {compacto ? null : <small>Sistema Integral de Servicios Médicos Empresariales</small>}
