@@ -4,9 +4,12 @@ import { useSesion } from '../datos/ProveedorSesion.jsx'
 import { formatearFecha } from '../domain/fecha.js'
 import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
+import { normalizarEdad } from '../domain/validadores.js'
+import { formularioPaciente } from '../domain/pacientes.js'
 
-// S5-T14: el formulario solo captura nombre, empresa y estado (SDD §4.1).
-const VACIO = { nombre: '', empresaId: '', estado: 'provisional' }
+// S5-T14: el formulario captura nombre, empresa y estado (SDD §4.1).
+// S7-T08: también captura la edad (opcional, entero de 0 a 120).
+const VACIO = { nombre: '', empresaId: '', estado: 'provisional', edad: '' }
 
 function CampoEstado({ valor, onCambio }) {
   return (
@@ -16,6 +19,15 @@ function CampoEstado({ valor, onCambio }) {
         <option value="activo">Activo</option>
         <option value="inactivo">Inactivo</option>
       </select>
+    </Campo>
+  )
+}
+
+function CampoEdad({ valor, onCambio }) {
+  const { error } = normalizarEdad(valor)
+  return (
+    <Campo etiqueta="Edad" error={error}>
+      <input type="number" inputMode="numeric" min="0" max="120" step="1" value={valor ?? ''} onChange={(e) => onCambio(e.target.value)} placeholder="Opcional" />
     </Campo>
   )
 }
@@ -146,6 +158,7 @@ function Alta({ api, empresas, onGuardado, onAviso, onError }) {
             {empresas.filter((item) => item.estado === 'activo').map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
           </select>
         </Campo>
+        <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} />
         <CampoEstado valor={form.estado} onCambio={(valor) => setForm({ ...form, estado: valor })} />
       </div>
       <div className="acciones">
@@ -176,12 +189,7 @@ export function FichaPaciente() {
       const actual = lista.ok ? lista.datos.find((item) => item.id === empleadoId) : null
       setPaciente(actual || null)
       if (actual) {
-        setForm({
-          id: actual.id,
-          nombre: actual.nombre,
-          empresaId: actual.empresaId,
-          estado: actual.estado
-        })
+        setForm(formularioPaciente(actual))
       }
       if (visitasRes.ok) setVisitas(visitasRes.datos)
       if (empresasRes.ok) setEmpresas(empresasRes.datos)
@@ -192,8 +200,15 @@ export function FichaPaciente() {
   async function guardar(evento) {
     evento.preventDefault()
     const resultado = await api.guardarEmpleado(form)
-    if (!resultado.ok) setError(resultado.mensaje)
-    else setMensaje('Los datos del paciente se actualizaron. El expediente clínico no se modifica desde aquí.')
+    if (!resultado.ok) {
+      setMensaje('')
+      setError(resultado.mensaje)
+    } else {
+      setError('')
+      setPaciente((anterior) => ({ ...anterior, ...resultado.datos }))
+      setForm(formularioPaciente(resultado.datos))
+      setMensaje('Los datos del paciente se actualizaron. El expediente clínico no se modifica desde aquí.')
+    }
   }
 
   async function abrirAtencion() {
@@ -211,7 +226,7 @@ export function FichaPaciente() {
       <div className="encabezado-pagina">
         <div>
           <h1>Consulta de paciente</h1>
-          <p className="nota">{paciente.folio} · {paciente.nombre} · Fecha de registro: {formatearFecha(paciente.fechaRegistro)}</p>
+          <p className="nota">{paciente.folio} · {paciente.nombre} · Edad: {paciente.edad ?? '—'} · Fecha de registro: {formatearFecha(paciente.fechaRegistro)}</p>
         </div>
         <div className="acciones">
           {esDoctor ? <Boton variante="azul" onClick={abrirAtencion}>Atender y adjuntar PDF</Boton> : null}
@@ -230,6 +245,7 @@ export function FichaPaciente() {
               {empresas.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
             </select>
           </Campo>
+          <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} />
           <CampoEstado valor={form.estado} onCambio={(valor) => setForm({ ...form, estado: valor })} />
         </div>
         <Boton variante="azul" tipo="submit">Guardar datos</Boton>
