@@ -31,11 +31,13 @@ export function Icono({ nombre, tamano = 20 }) {
 export function Logo({ compacto = false }) {
   return (
     <div className={`logo ${compacto ? 'logo-compacto' : ''}`}>
+
       <img
         className="logo-marca"
         src="/imagenes/SISME.png"
         alt="SISME — Sistema Integral de Servicios Médicos Empresariales"
       />
+
     </div>
   )
 }

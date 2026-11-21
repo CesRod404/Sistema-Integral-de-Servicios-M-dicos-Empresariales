@@ -34,6 +34,16 @@ h1, h2, h3, p { margin: 0; }
   justify-content: center;
   min-width: 0;
 }
+.logo strong { display: block; color: var(--navy); font-size: 1.45rem; letter-spacing: 0.04em; line-height: 1; }
+.logo small { display: block; max-width: 210px; color: var(--navy-2); font-size: 0.68rem; line-height: 1.2; }
+.logo-marca { width: 48px; height: 48px; flex-shrink: 0; object-fit: contain; }
+.logo-compacto small { display: none; }
+
+.barra-publica {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 16px 7vw; background: white; position: sticky; top: 0; z-index: 5;
+  border-bottom: 1px solid var(--line);
+}
 
 .logo-marca {
   display: block;
@@ -2198,3 +2208,7 @@ tr.valido { background: white; }
     transform: none;
   }
 }
+
+.detalle-empresa { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0 0 12px; }
+.detalle-empresa dt { font-weight: 800; color: var(--navy); }
+.detalle-empresa dd { margin: 0; }
