@@ -12,7 +12,7 @@ Inventario de la línea de trabajo entregada. No incluye secretos.
 | Backend | Supabase (PostgreSQL, Auth, Storage, RLS) |
 | Alojamiento previsto | Vercel |
 | Proyecto Supabase | `https://hjwuvvppxpwrryznhvox.supabase.co` |
-| Migración | `04_Desarrollo_Codigo/database/migrations/202610260001_sisme_inicial.sql` |
+| Migraciones | `202610260001_sisme_inicial.sql`, `202610300001_pacientes_doctor.sql`, `202611120001_plantillas_empresa.sql` (en   `04_Desarrollo_Codigo/database/migrations/`) |
 | Esquema de referencia | `04_Desarrollo_Codigo/database/schema/sisme_esquema.sql` |
 | Variables públicas | `.env.example` |
 | Construcción | `vercel.json` y `.github/workflows/ci.yml` (Node 22, pruebas y build) |

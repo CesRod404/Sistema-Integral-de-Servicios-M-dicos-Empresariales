@@ -11,7 +11,10 @@ cp .env.example .env
 npm run dev
 ```
 
-3. Mientras `VITE_SUPABASE_ANON_KEY` sea `REEMPLAZAR_CON_ANON_KEY`, el sistema trabaja en demostración. Use `admin@sisme.local` / `Admin1234` o `doctor@sisme.local` / `Doctor1234`.
+3. Ejecute en el editor SQL, en este orden exacto, las siguientes migraciones:
+   - `04_Desarrollo_Codigo/database/migrations/202610260001_sisme_inicial.sql`
+   - `04_Desarrollo_Codigo/database/migrations/202610300001_pacientes_doctor.sql`
+   - `04_Desarrollo_Codigo/database/migrations/202611120001_plantillas_empresa.sql`
 
 ## Puesta en marcha con Supabase
 
@@ -37,7 +40,7 @@ Configure en Vercel las dos variables `VITE_*` anteriores. Agregue el dominio de
 
 ## Operación diaria
 
-- El Administrador importa o da de alta empleados, agenda, marca presente o ausente y registra pagos.
+- El Administrador configura plantillas Excel por empresa (opcional), importa o da de alta empleados, agenda, marca presente o ausente y registra pagos.
 - El Doctor atiende solo a quien ya está presente, adjunta PDF y cierra el expediente. El cierre genera el cargo con la tarifa vigente.
 - Una empresa inactiva conserva citas, expedientes y cobros. No se eliminan registros con historia.
 - Los PDF no tienen URL permanente. El Doctor obtiene una liga firmada de dos minutos.
