@@ -1,26 +1,130 @@
 import { Link } from 'react-router-dom'
+import { Icono } from '../componentes/Iconos.jsx'
+import { IconoServicio } from '../componentes/IconosServicios.jsx'
 
 const SERVICIOS = [
-  ['Examen médico general', 'Evaluación del estado de salud del empleado para ingreso, periódicos o seguimiento.', ['Historia clínica', 'Exploración física', 'Certificado médico']],
-  ['Estudios de laboratorio', 'Análisis para detectar y prevenir riesgos, con registro del estudio realizado.', ['Biometría hemática', 'Química sanguínea', 'Examen general de orina']],
-  ['Estudios de gabinete', 'Apoyo diagnóstico por imagen y pruebas complementarias.', ['Rayos X', 'Electrocardiograma', 'Audiometría']]
+  {
+    titulo: 'Examen Médico General',
+    texto: 'Evaluación integral del estado de salud del empleado, ideal para ingreso, periódicos o de seguimiento.',
+    imagen: '/imagenes/consulta-medica.png',
+    costo: '$450.00 MXN',
+    color: 'azul',
+    icono: 'examen',
+    detalles: [
+      'Historia clínica',
+      'Exploración física',
+      'Certificado médico',
+    ],
+  },
+  {
+    titulo: 'Estudios de Laboratorio',
+    texto: 'Análisis clínicos para detectar y prevenir riesgos a la salud, con tecnología confiable y resultados precisos.',
+    imagen: '/imagenes/laboratorio.png',
+    costo: '$250.00 MXN',
+    color: 'naranja',
+    icono: 'laboratorio',
+    detalles: [
+      'Biometría hemática',
+      'Química sanguínea',
+      'Examen general de orina',
+      'Perfil lipídico',
+    ],
+  },
+  {
+    titulo: 'Estudios de Gabinete',
+    texto: 'Diagnósticos por imagen para una evaluación completa y oportuna de la salud.',
+    imagen: '/imagenes/diagnostico.png',
+    costo: '$300.00 MXN',
+    color: 'verde',
+    icono: 'gabinete',
+    detalles: [
+      'Rayos X (tórax)',
+      'Electrocardiograma (ECG)',
+      'Ultrasonido',
+      'Audiometría',
+    ],
+  },
 ]
 
 export function ServiciosPublico() {
   return (
-    <main className="pagina-publica">
-      <p className="ceja">SERVICIOS DE SALUD LABORAL</p>
-      <h1 style={{ color: 'var(--navy)', fontSize: '2.4rem', margin: '8px 0' }}>Nuestros servicios</h1>
-      <p className="nota">Información general para las empresas. Las tarifas de operación se administran en el catálogo interno y no se publican en este sitio.</p>
+    <main className="pagina-publica pagina-servicios">
+
+      {/* Encabezado con imagen de microscopio */}
+      <section className="servicios-hero">
+        <div className="servicios-hero-contenido">
+          <h1>Nuestros Servicios</h1>
+
+          <p>
+            Ofrecemos una amplia gama de estudios y evaluaciones médicas
+            para cuidar la salud de tu equipo de trabajo, con resultados
+            confiables y atención profesional.
+          </p>
+        </div>
+
+        <div className="servicios-hero-imagen" aria-hidden="true">
+          <div className="servicios-hero-etiqueta">
+            <Icono nombre="laboratorio" />
+            <span>
+              Resultados confiables
+              <br />
+              para empresas más saludables
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Tarjetas de servicios */}
       <section className="rejilla-servicios">
-        {SERVICIOS.map(([titulo, texto, puntos]) => (
-          <article key={titulo} className="tarjeta">
-            <h3>{titulo}</h3>
-            <p>{texto}</p>
-            <ul>
-              {puntos.map((punto) => <li key={punto}>{punto}</li>)}
-            </ul>
-            <Link to="/contacto" className="btn btn-linea">Más información</Link>
+        {SERVICIOS.map((servicio) => (
+          <article
+            key={servicio.titulo}
+            className={`tarjeta-servicio tarjeta-servicio-${servicio.color}`}
+          >
+            <div className="servicio-imagen-contenedor">
+              <img
+                src={servicio.imagen}
+                alt={servicio.titulo}
+                className="servicio-imagen"
+              />
+            </div>
+
+            <div className="servicio-icono">
+              <IconoServicio tipo={servicio.icono} />
+            </div>
+
+            <div className="servicio-contenido">
+              <h2>{servicio.titulo}</h2>
+
+              <p className="servicio-descripcion">
+                {servicio.texto}
+              </p>
+
+              <div className="servicio-informacion">
+                <div className="servicio-costo">
+                  <span className="servicio-label">Costo</span>
+                  <strong>{servicio.costo}</strong>
+                </div>
+
+                <div className="servicio-detalles">
+                  <span className="servicio-label">Detalles</span>
+
+                  <ul>
+                    {servicio.detalles.map((detalle) => (
+                      <li key={detalle}>
+                        <span className="servicio-check">✓</span>
+                        {detalle}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <Link to="/contacto" className="btn-servicio">
+                Más información
+                <span aria-hidden="true">›</span>
+              </Link>
+            </div>
           </article>
         ))}
       </section>

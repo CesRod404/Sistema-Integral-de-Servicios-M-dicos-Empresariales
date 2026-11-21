@@ -1,8 +1,9 @@
+// Diseño visual basado en los mockups de Miguel Angel López (diseñador UX/UI).
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
-import { Logo } from '../componentes/Iconos.jsx'
 import { Aviso, Boton, Campo } from '../componentes/Ui.jsx'
+import { InicioPublico } from './InicioPublico.jsx'
 
 export function Login() {
   const { usuario, entrar, modo } = useSesion()
@@ -31,31 +32,140 @@ export function Login() {
   }
 
   return (
-    <main className="pagina-publica">
-      <form className="tarjeta login-caja" onSubmit={enviar}>
-        <Logo />
-        <h1>Inicio de sesión</h1>
-        <Campo etiqueta="Correo" requerido>
-          <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </Campo>
-        <Campo etiqueta="Contraseña" requerido>
-          <input type={ver ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </Campo>
-        <div className="fila-login">
-          <label><input type="checkbox" checked={recordarme} onChange={(e) => setRecordarme(e.target.checked)} /> Recordarme</label>
-          <button type="button" className="btn btn-texto" onClick={() => setVer((v) => !v)}>{ver ? 'Ocultar' : 'Mostrar'}</button>
+    <main className="login-modal-pagina">
+
+      {/* Portada visible detrás del login */}
+      <div className="login-fondo-portada" aria-hidden="true">
+        <InicioPublico />
+      </div>
+
+      {/* Capa tenue sobre la portada */}
+      <div className="login-capa-oscura" />
+
+      {/* Ventana modal */}
+      <section
+        className="login-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-titulo"
+      >
+        {/* Encabezado con logo */}
+
+
+        <div className="login-modal-contenido">
+          <h1 id="login-titulo">Inicio de sesión</h1>
+
+          <form className="login-modal-formulario" onSubmit={enviar}>
+            <Campo etiqueta="Usuario:" requerido>
+              <input
+                type="email"
+                autoComplete="username"
+                placeholder="consultorio medico"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </Campo>
+
+            <Campo etiqueta="Contraseña:" requerido>
+              <div className="login-password-contenedor">
+                <input
+                  type={ver ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Ingresa tu contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setVer((v) => !v)}
+                  aria-label={ver ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    {ver ? (
+                      <>
+                        <path d="M3 3l18 18" />
+                        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                        <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a16 16 0 0 1-3.2 4.1" />
+                        <path d="M6.2 6.2C3.5 8 2 12 2 12s3.5 7 10 7a10 10 0 0 0 4-.8" />
+                      </>
+                    ) : (
+                      <>
+                        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </>
+                    )}
+                  </svg>
+                </button>
+              </div>
+            </Campo>
+
+            <div className="login-modal-opciones">
+              <label className="login-modal-recordarme">
+                <input
+                  type="checkbox"
+                  checked={recordarme}
+                  onChange={(e) => setRecordarme(e.target.checked)}
+                />
+                <span>Recordarme</span>
+              </label>
+
+              <Link className="login-modal-recuperar" to="/recuperar">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+
+            <Aviso tipo="error">{mensaje}</Aviso>
+
+            <Boton
+              variante="azul"
+              tipo="submit"
+              disabled={enviando}
+            >
+              {enviando ? 'Ingresando…' : 'Ingreso'}
+            </Boton>
+
+            {modo === 'demo' ? (
+              <div className="demo-credenciales">
+                <p>Demostración local</p>
+
+                <button
+                  type="button"
+                  className="btn btn-texto"
+                  onClick={() => {
+                    setEmail('admin@sisme.local')
+                    setPassword('Admin1234')
+                  }}
+                >
+                  Administrador: admin@sisme.local
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-texto"
+                  onClick={() => {
+                    setEmail('doctor@sisme.local')
+                    setPassword('Doctor1234')
+                  }}
+                >
+                  Doctor: doctor@sisme.local
+                </button>
+              </div>
+            ) : null}
+          </form>
         </div>
-        <Aviso tipo="error">{mensaje}</Aviso>
-        <Boton variante="azul" tipo="submit" disabled={enviando}>{enviando ? 'Ingresando…' : 'Ingreso'}</Boton>
-        <p style={{ marginTop: 12 }}><Link className="enlace" to="/recuperar">¿Olvidaste tu contraseña?</Link></p>
-        {modo === 'demo' ? (
-          <div className="demo-credenciales">
-            <p>Demostración local</p>
-            <button type="button" className="btn btn-texto" onClick={() => { setEmail('admin@sisme.local'); setPassword('Admin1234') }}>Administrador: admin@sisme.local / Admin1234</button>
-            <button type="button" className="btn btn-texto" onClick={() => { setEmail('doctor@sisme.local'); setPassword('Doctor1234') }}>Doctor: doctor@sisme.local / Doctor1234</button>
-          </div>
-        ) : null}
-      </form>
+      </section>
     </main>
   )
 }

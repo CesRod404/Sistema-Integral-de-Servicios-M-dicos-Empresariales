@@ -16,7 +16,7 @@ const trazos = {
   documento: 'M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 0v5h5',
   salir: 'M10 7V5a1 1 0 0 1 1-1h8v16h-8a1 1 0 0 1-1-1v-2M4 12h10M11 9l3 3-3 3',
   reloj: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
-  lapiz: 'M4 20h4l10-10-4-4L4 16v4Zm9.5-13.5 4 4'
+  lapiz: 'M4 20h4l10-10-4-4L4 16v4Zm9.5-13.5 4 4',
 }
 
 export function Icono({ nombre, tamano = 20 }) {
@@ -31,17 +31,11 @@ export function Icono({ nombre, tamano = 20 }) {
 export function Logo({ compacto = false }) {
   return (
     <div className={`logo ${compacto ? 'logo-compacto' : ''}`}>
-      <svg className="logo-marca" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="24" cy="34" r="16" fill="#eef3f8" stroke="#1f4e89" strokeWidth="2" />
-        <circle cx="40" cy="30" r="14" fill="#fff7ec" stroke="#f28c28" strokeWidth="2" />
-        <path d="M24 26v16M18 32h12" stroke="#1f4e89" strokeWidth="2.4" strokeLinecap="round" />
-        <path d="M40 24c2 3 2 8 0 12" stroke="#2f9e6b" strokeWidth="2" fill="none" />
-        <circle cx="40" cy="22" r="2" fill="#2f9e6b" />
-      </svg>
-      <div>
-        <strong>SISME</strong>
-        {compacto ? null : <small>Sistema Integral de Servicios Médicos Empresariales</small>}
-      </div>
+      <img
+        className="logo-marca"
+        src="/imagenes/SISME.png"
+        alt="SISME — Sistema Integral de Servicios Médicos Empresariales"
+      />
     </div>
   )
 }

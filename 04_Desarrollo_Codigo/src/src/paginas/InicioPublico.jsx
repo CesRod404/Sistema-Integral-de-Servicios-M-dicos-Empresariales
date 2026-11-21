@@ -10,27 +10,24 @@ export function InicioPublico() {
           <p className="ceja">GESTIÓN INTELIGENTE, SALUD LABORAL EFICIENTE</p>
           <h1>Cuidamos la salud de tu equipo, <span>impulsamos tu empresa</span></h1>
           <p>
-            En SISME facilitamos la atención médica de los colaboradores: empresas, listas de empleados,
-            citas, asistencia, expediente clínico y cobranza quedan en un solo sistema.
+            En SISME, facilitamos la atención médica de tus colaboradores integrando en un solo sistema
+            la programación de citas, la atención médica, los estudios y el control de cuentas por empresa.
           </p>
           <div className="acciones">
             <ModalAgendarCita />
             <Link to="/servicios" className="btn btn-linea"><Icono nombre="documento" /> Conoce nuestros servicios</Link>
           </div>
         </div>
-        <div className="hero-figura" aria-hidden="true">
-          <div className="hero-tarjeta">
-            <strong>Atención de salud laboral</strong>
-            <p>El doctor registra la atención y el administrador controla el cobro.</p>
-          </div>
+        <div className="hero-figura">
+          
         </div>
       </section>
       <section className="pilares">
         {[
-          ['pacientes', 'tono-azul', 'Atención integral', 'Empresas, citas, asistencia y expediente en el mismo flujo.'],
-          ['citas', 'tono-naranja', 'Agenda del día', 'Programación de citas y registro de presente o ausente.'],
-          ['documento', 'tono-verde', 'Expediente protegido', 'Estudios en PDF dentro de un repositorio privado.'],
-          ['cobranza', 'tono-gris', 'Cobro por empresa', 'Cargos con precio histórico y pagos registrados por el administrador.']
+          ['pacientes', 'tono-azul', 'Atención integral', 'Todo el proceso médico en un solo sistema.'],
+          ['citas', 'tono-naranja', 'Gestión inteligente', 'Programación de citas y control de asistencia.'],
+          ['documento', 'tono-verde', 'Información segura', 'Expedientes digitales y acceso controlado.'],
+          ['cobranza', 'tono-gris', 'Control empresarial', 'Seguimiento de estudios, cargos y pagos por empresa.']
         ].map(([icono, tono, titulo, texto]) => (
           <article key={titulo} className="tarjeta">
             <div className={`icono-circulo ${tono}`}><Icono nombre={icono} /></div>

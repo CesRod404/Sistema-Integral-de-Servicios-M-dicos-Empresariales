@@ -1,4 +1,5 @@
 // Página de inicio de DrakeJJ (José Eduardo Juárez Martínez).
+// Diseño visual basado en los mockups de Miguel Angel López (diseñador UX/UI).
 import { Link } from 'react-router-dom'
 import { Icono } from '../componentes/Iconos.jsx'
 import { ModalAgendarCita } from '../componentes/ModalAgendarCita.jsx'
