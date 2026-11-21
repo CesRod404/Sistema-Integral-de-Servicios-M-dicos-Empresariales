@@ -179,7 +179,7 @@ export function evaluarConfirmacion(filas, decisiones = {}, opciones = {}) {
       operaciones.push(operacion(fila, 'descartar'))
       continue
     }
-    if (!fila.valores.nombre) {
+    if (!fila.valores.nombre || fila.incompleta) {
       errores.push({ indice: fila.indice, codigo: 'INCOMPLETO' })
       continue
     }

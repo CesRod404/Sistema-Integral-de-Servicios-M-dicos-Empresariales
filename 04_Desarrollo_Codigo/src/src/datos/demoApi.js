@@ -7,6 +7,8 @@ import { vistaEstudio, vistaExpediente } from '../domain/roles.js'
 import { validarCita, validarEmpleado, validarEmpresa, validarEstudio, validarPdf, normalizarCorreo, normalizarTelefono, validarCurp, normalizarEdad } from '../domain/validadores.js'
 import { desdeMexicoInput, hoyMexico } from '../domain/fecha.js'
 import { crearSemilla } from './semilla.js'
+import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { prepararEdicionEmpresa, validarCambioEstadoEmpresa } from '../domain/empresas.js'
 
 const CLAVE = 'sisme.demo.v1'
 const CLAVE_SESION = 'sisme.demo.sesion'
@@ -81,6 +83,10 @@ export function crearApiDemo() {
 
   return {
     modo: 'demo',
+
+    suscribirSesion() {
+      return () => {}
+    },
 
     async obtenerSesion() {
       return bien(usuarioActual())
@@ -172,16 +178,12 @@ export function crearApiDemo() {
       )
       if (duplicada) return mal('Ya existe una empresa con ese nombre.')
       if (datos.id) {
+        // US-EMP-02 / RF-05: solo cambian los campos de contacto modificados.
         const actual = estado.empresas.find((empresa) => empresa.id === datos.id)
-        if (!actual) return mal('La empresa no existe.')
-        Object.assign(actual, {
-          nombre: datos.nombre.trim(),
-          contacto: datos.contacto.trim(),
-          email: normalizarCorreo(datos.email),
-          telefono,
-          direccion: datos.direccion?.trim() || '',
-          notas: datos.notas?.trim() || ''
-        })
+        const edicion = prepararEdicionEmpresa(actual, datos)
+        if (!edicion.ok) return mal(edicion.mensaje)
+        if (!edicion.campos.length) return { ok: true, datos: actual, sinCambios: true }
+        for (const campo of edicion.campos) actual[campo] = edicion.cambios[campo] ?? ''
         guardar(estado)
         return bien(actual)
       }
@@ -204,10 +206,11 @@ export function crearApiDemo() {
     async cambiarEstadoEmpresa(id, nuevoEstado) {
       const permiso = exigir(usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
-      if (!['activo', 'inactivo'].includes(nuevoEstado)) return mal('El estado de la empresa no es válido.')
+      // US-EMP-03 / RF-06: baja lógica; empleados, citas, expedientes y cargos no se tocan.
       const estado = cargar()
       const empresa = estado.empresas.find((item) => item.id === id)
-      if (!empresa) return mal('La empresa no existe.')
+      const invalido = validarCambioEstadoEmpresa(empresa, nuevoEstado)
+      if (invalido) return mal(invalido)
       empresa.estado = nuevoEstado
       guardar(estado)
       return bien(empresa)
@@ -222,29 +225,31 @@ export function crearApiDemo() {
     },
 
     async guardarEmpleado(datos) {
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      // S5-T14: mismo permiso que supabaseApi (Administrador y Doctor).
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const errores = validarEmpleado(datos)
       if (Object.keys(errores).length) return mal(Object.values(errores)[0])
       const estado = cargar()
       const empresa = estado.empresas.find((item) => item.id === datos.empresaId)
       if (!empresa) return mal('Seleccione la empresa del paciente.')
-      const curp = validarCurp(datos.curp).valor
+      // Los campos opcionales de la importación solo se escriben si se envían.
+      const opcionales = {}
+      if ('curp' in datos) opcionales.curp = validarCurp(datos.curp).valor
+      if ('claveEmpleado' in datos) opcionales.claveEmpleado = datos.claveEmpleado?.trim() || null
+      if ('email' in datos) opcionales.email = datos.email ? normalizarCorreo(datos.email) : null
+      if ('telefono' in datos) opcionales.telefono = normalizarTelefono(datos.telefono).valor
+      if ('edad' in datos) opcionales.edad = normalizarEdad(datos.edad).valor
+      const curp = opcionales.curp
       const ocupada = estado.empleados.find((item) => curp && item.curp === curp && item.id !== datos.id)
       if (ocupada) return mal('La CURP ya está registrada. Revise si el paciente es un duplicado.')
-      const telefono = normalizarTelefono(datos.telefono).valor
-      const edad = normalizarEdad(datos.edad).valor
       if (datos.id) {
         const actual = estado.empleados.find((item) => item.id === datos.id)
         if (!actual) return mal('El paciente no existe.')
         Object.assign(actual, {
           nombre: datos.nombre.trim(),
           empresaId: datos.empresaId,
-          curp,
-          claveEmpleado: datos.claveEmpleado?.trim() || null,
-          email: datos.email ? normalizarCorreo(datos.email) : null,
-          telefono,
-          edad,
+          ...opcionales,
           estado: datos.estado || actual.estado
         })
         guardar(estado)
@@ -255,12 +260,14 @@ export function crearApiDemo() {
         folio: folioSiguiente(estado.empleados, 'P'),
         empresaId: datos.empresaId,
         nombre: datos.nombre.trim(),
-        curp,
-        claveEmpleado: datos.claveEmpleado?.trim() || null,
-        email: datos.email ? normalizarCorreo(datos.email) : null,
-        telefono,
-        edad,
-        estado: 'provisional'
+        curp: null,
+        claveEmpleado: null,
+        email: null,
+        telefono: null,
+        edad: null,
+        ...opcionales,
+        estado: datos.estado || 'provisional',
+        fechaRegistro: new Date().toISOString()
       }
       estado.empleados.push(empleado)
       guardar(estado)
@@ -313,6 +320,36 @@ export function crearApiDemo() {
       estado.citas.push(cita)
       guardar(estado)
       return bien(vistaCita(estado, cita))
+    },
+
+    async abrirAtencionDoctor(empleadoId) {
+      // Réplica en memoria de la RPC abrir_atencion_doctor (migración 202610300001).
+      const permiso = exigir(usuarioActual(), ['doctor'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const empleado = estado.empleados.find((item) => item.id === empleadoId)
+      if (!empleado) return mal('El paciente no existe.')
+      if (empleado.estado === 'inactivo') return mal('El paciente está inactivo.')
+      const empresa = estado.empresas.find((item) => item.id === empleado.empresaId)
+      if (!empresa || empresa.estado !== 'activo') return mal('La empresa del paciente está inactiva.')
+      const abierta = estado.citas
+        .filter((cita) => cita.empleadoId === empleadoId && cita.estadoAsistencia === 'presente' && diaDeCita(cita.fechaHora) === hoyMexico())
+        .filter((cita) => {
+          const expediente = estado.expedientes.find((item) => item.citaId === cita.id)
+          return !expediente || expediente.estadoExpediente === 'abierto'
+        })
+        .sort((a, b) => b.fechaHora.localeCompare(a.fechaHora))[0]
+      if (abierta) return bien({ citaId: abierta.id })
+      const cita = {
+        id: crypto.randomUUID(),
+        empleadoId,
+        fechaHora: new Date().toISOString(),
+        estadoAsistencia: 'presente',
+        motivo: 'Atención registrada por el doctor'
+      }
+      estado.citas.push(cita)
+      guardar(estado)
+      return bien({ citaId: cita.id })
     },
 
     async registrarAsistencia(citaId, nuevoEstado) {
@@ -515,7 +552,7 @@ export function crearApiDemo() {
       return bien(reportePeriodo({ empresas: estado.empresas, cargos: estado.cargos, pagos: estado.pagos, desde, hasta }))
     },
 
-    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas }) {
+    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas, plantillaVersion = null }) {
       const usuario = usuarioActual()
       const permiso = exigir(usuario, ['administrador'])
       if (permiso) return mal(permiso)
@@ -523,6 +560,13 @@ export function crearApiDemo() {
       const empresa = estado.empresas.find((item) => item.id === empresaId)
       if (!empresa || empresa.estado !== 'activo') return mal('Seleccione una empresa activa.')
       if (!Array.isArray(filas) || !filas.length) return mal('El archivo no contiene registros para importar.')
+      // CRQ-004: misma regla que importar_empleados en Supabase.
+      const plantilla = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
+      if (plantilla && Number(plantillaVersion) !== plantilla.version) {
+        return mal(`La plantilla de la empresa cambió (versión vigente: ${plantilla.version}). Descargue la plantilla vigente y vuelva a cargar el archivo.`)
+      }
+      if (!plantilla && plantillaVersion) return mal('La versión de plantilla del archivo no existe para esta empresa. Descargue la plantilla vigente.')
+      const personalizadas = new Set((plantilla?.columnas || []).filter((columna) => columna.personalizado).map((columna) => columna.clave))
       const claves = new Map()
       let insertados = 0
       let actualizados = 0
@@ -539,9 +583,13 @@ export function crearApiDemo() {
           email: fila.email || null,
           telefono: fila.telefono || null,
           edad: fila.edad ?? null,
+          datosExtra: fila.datos_extra || {},
           empresaId
         }
         if (!valores.nombre) return mal('Hay registros incompletos. La importación no se confirmó.')
+        if (Object.keys(valores.datosExtra).some((clave) => !personalizadas.has(clave))) {
+          return mal('El lote trae columnas que no están en la plantilla de la empresa.')
+        }
         const clave = valores.curp ? `curp:${valores.curp}` : valores.claveEmpleado ? `clave:${valores.claveEmpleado}` : `nombre:${valores.nombre.toLowerCase()}`
         claves.set(clave, (claves.get(clave) || 0) + 1)
         if (claves.get(clave) > 1) return mal('Hay duplicados dentro del archivo. Conserve un solo registro de cada grupo y descarte el resto.')
@@ -556,6 +604,7 @@ export function crearApiDemo() {
           actual.email = valores.email || actual.email
           actual.telefono = valores.telefono || actual.telefono
           actual.edad = valores.edad ?? actual.edad
+          actual.datosExtra = { ...(actual.datosExtra || {}), ...valores.datosExtra }
           actualizados += 1
         } else if (duplicado) {
           return mal('Hay duplicados sin decisión. La importación no se confirmó.')
@@ -570,7 +619,9 @@ export function crearApiDemo() {
             email: valores.email,
             telefono: valores.telefono,
             edad: valores.edad,
-            estado: 'provisional'
+            datosExtra: valores.datosExtra,
+            estado: 'provisional',
+            fechaRegistro: new Date().toISOString()
           })
           insertados += 1
         }
@@ -583,10 +634,50 @@ export function crearApiDemo() {
         insertados,
         actualizados,
         descartados,
+        plantillaVersion: plantilla ? plantilla.version : null,
         fecha: new Date().toISOString()
       })
       guardar(estado)
       return bien({ insertados, actualizados, descartados })
+    },
+
+    async obtenerPlantillaEmpresa(empresaId) {
+      // CRQ-004: plantilla vigente de la empresa o null si usa la predeterminada.
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const vigente = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
+      return bien(vigente ? { ...vigente, columnas: vigente.columnas.map((columna) => ({ ...columna })) } : null)
+    },
+
+    async guardarPlantillaEmpresa(empresaId, columnas) {
+      const usuario = usuarioActual()
+      if (exigir(usuario, ['administrador'])) return mal(MENSAJES_PLANTILLA.PERMISO)
+      const estado = cargar()
+      const empresa = estado.empresas.find((item) => item.id === empresaId)
+      if (!empresa) return mal('La empresa no existe.')
+      if (empresa.estado !== 'activo') return mal('No se configura la plantilla de una empresa inactiva.')
+      const validacion = validarPlantilla(columnas)
+      if (!validacion.ok) return mal(validacion.errores[0])
+      estado.plantillas = estado.plantillas || []
+      const version = estado.plantillas
+        .filter((item) => item.empresaId === empresaId)
+        .reduce((maximo, item) => Math.max(maximo, item.version), 0) + 1
+      estado.plantillas.forEach((item) => {
+        if (item.empresaId === empresaId) item.activa = false
+      })
+      const plantilla = {
+        id: crypto.randomUUID(),
+        empresaId,
+        version,
+        columnas: validacion.columnas,
+        activa: true,
+        actualizadoPor: usuario.id,
+        actualizadoEn: new Date().toISOString()
+      }
+      estado.plantillas.push(plantilla)
+      guardar(estado)
+      return bien({ ...plantilla })
     },
 
     async listarImportaciones() {
@@ -600,7 +691,7 @@ export function crearApiDemo() {
     },
 
     async consultarPacientesAdmin() {
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
       const pacientes = estado.empleados.map((empleado) => {
@@ -623,7 +714,7 @@ export function crearApiDemo() {
     },
 
     async consultarVisitasAdmin(empleadoId) {
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
       const visitas = estado.citas

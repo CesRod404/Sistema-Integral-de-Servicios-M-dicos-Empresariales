@@ -58,7 +58,7 @@ export function PacientesDoctor() {
     <section>
       <div className="encabezado-pagina">
         <div>
-          <h1>Pacientes</h1>
+          <h1>Cola del día</h1>
           <p className="nota">Cola del día. El estado presente o ausente lo registra el administrador.</p>
         </div>
       </div>

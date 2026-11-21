@@ -17,8 +17,12 @@ export function ProveedorSesion({ children }) {
       setUsuario(resultado.ok ? resultado.datos : null)
       setCargando(false)
     })
+    const quitar = api.suscribirSesion(() => {
+      if (vivo) setUsuario(null)
+    })
     return () => {
       vivo = false
+      quitar()
     }
   }, [api])
 
