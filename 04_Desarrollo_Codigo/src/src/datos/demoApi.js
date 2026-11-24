@@ -7,7 +7,8 @@ import { vistaEstudio, vistaExpediente } from '../domain/roles.js'
 import { validarCita, validarEmpleado, validarEmpresa, validarEstudio, validarPdf, normalizarCorreo, normalizarTelefono, validarCurp, normalizarEdad } from '../domain/validadores.js'
 import { desdeMexicoInput, hoyMexico } from '../domain/fecha.js'
 import { crearSemilla } from './semilla.js'
-import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { MENSAJES_PLANTILLA, plantillaPredeterminada, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { pacienteDeFila, resolverPlantilla } from '../domain/atencionPlantilla.js'
 import { prepararEdicionEmpresa, validarCambioEstadoEmpresa } from '../domain/empresas.js'
 
 const CLAVE = 'sisme.demo.v1'
@@ -240,6 +241,11 @@ export function crearApiDemo() {
       if ('email' in datos) opcionales.email = datos.email ? normalizarCorreo(datos.email) : null
       if ('telefono' in datos) opcionales.telefono = normalizarTelefono(datos.telefono).valor
       if ('edad' in datos) opcionales.edad = normalizarEdad(datos.edad).valor
+      if ('datosExtra' in datos) {
+        opcionales.datosExtra = datos.datosExtra && typeof datos.datosExtra === 'object' && !Array.isArray(datos.datosExtra)
+          ? { ...datos.datosExtra }
+          : {}
+      }
       const curp = opcionales.curp
       const ocupada = estado.empleados.find((item) => curp && item.curp === curp && item.id !== datos.id)
       if (ocupada) return mal('La CURP ya está registrada. Revise si el paciente es un duplicado.')
@@ -265,6 +271,7 @@ export function crearApiDemo() {
         email: null,
         telefono: null,
         edad: null,
+        datosExtra: {},
         ...opcionales,
         estado: datos.estado || 'provisional',
         fechaRegistro: new Date().toISOString()
@@ -643,7 +650,8 @@ export function crearApiDemo() {
 
     async obtenerPlantillaEmpresa(empresaId) {
       // CRQ-004: plantilla vigente de la empresa o null si usa la predeterminada.
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      // S7-T10: el doctor también la consulta para mostrar los campos en la atención.
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
       const vigente = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
@@ -753,7 +761,11 @@ function diaDeCita(iso) {
 
 function enriquecerEmpleado(estado, empleado) {
   const empresa = estado.empresas.find((item) => item.id === empleado.empresaId)
-  return { ...empleado, empresaNombre: empresa?.nombre || '—' }
+  return {
+    ...empleado,
+    empresaNombre: empresa?.nombre || '—',
+    datosExtra: empleado.datosExtra && typeof empleado.datosExtra === 'object' ? empleado.datosExtra : {}
+  }
 }
 
 function vistaCita(estado, cita) {
@@ -774,12 +786,22 @@ function vistaCita(estado, cita) {
   }
 }
 
+function plantillaDeEmpresa(estado, empresaId) {
+  const vigente = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
+  return vigente
+    ? resolverPlantilla({ ...vigente, columnas: (vigente.columnas || []).map((columna) => ({ ...columna })) }, empresaId)
+    : plantillaPredeterminada(empresaId)
+}
+
 function armarAtencion(estado, citaId, rol) {
   const cita = estado.citas.find((item) => item.id === citaId)
   if (!cita) return null
   const vista = vistaCita(estado, cita)
+  const empleado = estado.empleados.find((item) => item.id === cita.empleadoId)
+  const paciente = empleado ? pacienteDeFila(empleado) : null
+  const plantilla = plantillaDeEmpresa(estado, empleado?.empresaId)
   const expediente = estado.expedientes.find((item) => item.citaId === citaId)
-  if (!expediente) return { cita: vista, expediente: null }
+  if (!expediente) return { cita: vista, expediente: null, paciente, plantilla }
   const detalle = {
     id: expediente.id,
     citaId: expediente.citaId,
@@ -795,7 +817,7 @@ function armarAtencion(estado, citaId, rol) {
       .filter((archivo) => archivo.expedienteId === expediente.id)
       .map((archivo) => ({ id: archivo.id, nombre: archivo.nombre, tamano: archivo.tamano }))
   }
-  return { cita: vista, expediente: vistaExpediente(detalle, rol) }
+  return { cita: vista, expediente: vistaExpediente(detalle, rol), paciente, plantilla }
 }
 
 function vistaCargo(estado, cargo) {
