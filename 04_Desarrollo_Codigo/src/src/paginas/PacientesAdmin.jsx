@@ -5,11 +5,13 @@ import { formatearFecha } from '../domain/fecha.js'
 import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 import { normalizarEdad } from '../domain/validadores.js'
-import { formularioPaciente } from '../domain/pacientes.js'
+import { formularioPaciente, prepararCitaDeAlta } from '../domain/pacientes.js'
 
 // S5-T14: el formulario captura nombre, empresa y estado (SDD §4.1).
 // S7-T08: también captura la edad (opcional, entero de 0 a 120).
+// S7-T09: el administrador puede asignar, de forma opcional, fecha y hora de cita.
 const VACIO = { nombre: '', empresaId: '', estado: 'provisional', edad: '' }
+const VACIO_ALTA = { ...VACIO, fechaHoraLocal: '', motivo: '' }
 
 function CampoEstado({ valor, onCambio }) {
   return (
@@ -68,11 +70,12 @@ export function PacientesAdmin() {
           <h1>Pacientes</h1>
           <p className="nota">{esDoctor
             ? 'Alta, edición y consulta de pacientes. Al registrar un paciente se abre su atención para adjuntar el examen en PDF.'
-            : 'Alta manual o consulta. El expediente clínico se consulta en solo lectura, sin diagnóstico ni PDF.'}</p>
+            : 'Alta manual o consulta. Si indica fecha y hora, la cita queda en la agenda y la doctora la ve en la Cola del día de esa fecha. El expediente clínico se consulta en solo lectura, sin diagnóstico ni PDF.'}</p>
         </div>
         <Alta
           api={api}
           empresas={empresas}
+          puedeAgendarCita={!esDoctor}
           onGuardado={async (paciente) => {
             if (!esDoctor) return cargar()
             // S5-T14: el paciente que registra el doctor entra siempre a la Cola del
@@ -132,22 +135,41 @@ export function PacientesAdmin() {
   )
 }
 
-function Alta({ api, empresas, onGuardado, onAviso, onError }) {
+function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError }) {
   const [abierto, setAbierto] = useState(false)
-  const [form, setForm] = useState(VACIO)
+  const [form, setForm] = useState(VACIO_ALTA)
   if (!abierto) return <Boton variante="azul" onClick={() => setAbierto(true)}>Nuevo paciente</Boton>
   return (
     <form className="panel" onSubmit={async (evento) => {
       evento.preventDefault()
+      const preparado = puedeAgendarCita ? prepararCitaDeAlta(form) : { ok: true, cita: null }
+      if (!preparado.ok) {
+        onError(preparado.mensaje)
+        return
+      }
       const resultado = await api.guardarEmpleado(form)
-      if (!resultado.ok) onError(resultado.mensaje)
-      else {
+      if (!resultado.ok) {
+        onError(resultado.mensaje)
+        return
+      }
+      if (preparado.cita) {
+        const cita = await api.guardarCita({ empleadoId: resultado.datos.id, ...preparado.cita })
+        if (!cita.ok) {
+          onError(`El paciente quedó registrado, pero la cita no se pudo agendar: ${cita.mensaje}`)
+          setForm(VACIO_ALTA)
+          setAbierto(false)
+          onGuardado(resultado.datos)
+          return
+        }
+        onError('')
+        onAviso('El paciente quedó registrado y la cita quedó en la agenda. La doctora la verá en la Cola del día de esa fecha. Márquela como presente cuando llegue.')
+      } else {
         onError('')
         onAviso('El paciente quedó registrado.')
-        setForm(VACIO)
-        setAbierto(false)
-        onGuardado(resultado.datos)
       }
+      setForm(VACIO_ALTA)
+      setAbierto(false)
+      onGuardado(resultado.datos)
     }}>
       <h3>Alta manual</h3>
       <div className="form-grid">
@@ -160,7 +182,18 @@ function Alta({ api, empresas, onGuardado, onAviso, onError }) {
         </Campo>
         <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} />
         <CampoEstado valor={form.estado} onCambio={(valor) => setForm({ ...form, estado: valor })} />
+        {puedeAgendarCita ? (
+          <>
+            <Campo etiqueta="Fecha y hora de la cita">
+              <input type="datetime-local" value={form.fechaHoraLocal} onChange={(e) => setForm({ ...form, fechaHoraLocal: e.target.value })} />
+            </Campo>
+            <Campo etiqueta="Motivo">
+              <input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Opcional" />
+            </Campo>
+          </>
+        ) : null}
       </div>
+      {puedeAgendarCita ? <p className="nota">La fecha y la hora son opcionales. Si las indica, la cita queda programada y aparece en la Cola del día de la doctora. El paciente también se puede registrar sin cita.</p> : null}
       <div className="acciones">
         <Boton variante="azul" tipo="submit">Guardar</Boton>
         <Boton variante="linea" onClick={() => setAbierto(false)}>Cancelar</Boton>
