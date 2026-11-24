@@ -5,11 +5,15 @@ import { formatearFecha } from '../domain/fecha.js'
 import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 import { normalizarEdad } from '../domain/validadores.js'
-import { formularioPaciente } from '../domain/pacientes.js'
+import { formularioPaciente, prepararCitaDeAlta } from '../domain/pacientes.js'
+import { inputDeCampo, payloadAltaPaciente, plantillaPredeterminada, resolverPlantilla, valoresDesdePaciente } from '../domain/plantillaCampos.js'
 
 // S5-T14: el formulario captura nombre, empresa y estado (SDD §4.1).
 // S7-T08: también captura la edad (opcional, entero de 0 a 120).
+// S7-T09: el administrador puede asignar, de forma opcional, fecha y hora de cita.
+// S7-T11: al elegir empresa se muestran los campos de su plantilla vigente.
 const VACIO = { nombre: '', empresaId: '', estado: 'provisional', edad: '' }
+const VACIO_ALTA = { ...VACIO, fechaHoraLocal: '', motivo: '' }
 
 function CampoEstado({ valor, onCambio }) {
   return (
@@ -67,12 +71,13 @@ export function PacientesAdmin() {
         <div>
           <h1>Pacientes</h1>
           <p className="nota">{esDoctor
-            ? 'Alta, edición y consulta de pacientes. Al registrar un paciente se abre su atención para adjuntar el examen en PDF.'
-            : 'Alta manual o consulta. El expediente clínico se consulta en solo lectura, sin diagnóstico ni PDF.'}</p>
+            ? 'Alta, edición y consulta de pacientes. Al elegir la empresa aparecen los campos de su plantilla. Al registrar un paciente se abre su atención para adjuntar el examen en PDF.'
+            : 'Alta manual o consulta. Al elegir la empresa aparecen los campos de su plantilla Excel. Si indica fecha y hora, la cita queda en la agenda y la doctora la ve en la Cola del día de esa fecha. El expediente clínico se consulta en solo lectura, sin diagnóstico ni PDF.'}</p>
         </div>
         <Alta
           api={api}
           empresas={empresas}
+          puedeAgendarCita={!esDoctor}
           onGuardado={async (paciente) => {
             if (!esDoctor) return cargar()
             // S5-T14: el paciente que registra el doctor entra siempre a la Cola del
@@ -132,22 +137,100 @@ export function PacientesAdmin() {
   )
 }
 
-function Alta({ api, empresas, onGuardado, onAviso, onError }) {
+function columnasDeAlta(plantilla) {
+  return (plantilla?.columnas || []).filter((columna) => columna.clave !== 'nombre_completo')
+}
+
+function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError }) {
   const [abierto, setAbierto] = useState(false)
-  const [form, setForm] = useState(VACIO)
+  const [form, setForm] = useState(VACIO_ALTA)
+  const [plantilla, setPlantilla] = useState(null)
+  const [valoresPlantilla, setValoresPlantilla] = useState({})
+
+  useEffect(() => {
+    if (!form.empresaId) {
+      setPlantilla(null)
+      setValoresPlantilla({})
+      return
+    }
+    let vivo = true
+    api.obtenerPlantillaEmpresa(form.empresaId).then((resultado) => {
+      if (!vivo) return
+      if (!resultado.ok) {
+        onError(resultado.mensaje)
+        const fallback = plantillaPredeterminada(form.empresaId)
+        setPlantilla(fallback)
+        setValoresPlantilla(valoresDesdePaciente(fallback, { nombre: form.nombre, edad: form.edad }))
+        return
+      }
+      const vigente = resolverPlantilla(resultado.datos, form.empresaId)
+      setPlantilla(vigente)
+      setValoresPlantilla(valoresDesdePaciente(vigente, { nombre: form.nombre, edad: form.edad }))
+    })
+    return () => { vivo = false }
+  }, [api, form.empresaId])
+
+  function cambiarCampo(clave, valor) {
+    setValoresPlantilla((actual) => ({ ...actual, [clave]: valor }))
+    if (clave === 'edad') setForm((actual) => ({ ...actual, edad: valor }))
+  }
+
   if (!abierto) return <Boton variante="azul" onClick={() => setAbierto(true)}>Nuevo paciente</Boton>
+  const columnas = columnasDeAlta(plantilla)
+  const etiquetaPlantilla = !form.empresaId
+    ? null
+    : (plantilla?.predeterminada || !plantilla?.version
+      ? 'Plantilla predeterminada de la empresa. Complete los campos para el registro.'
+      : `Campos de la plantilla vigente · versión ${plantilla.version}.`)
+
   return (
     <form className="panel" onSubmit={async (evento) => {
       evento.preventDefault()
-      const resultado = await api.guardarEmpleado(form)
-      if (!resultado.ok) onError(resultado.mensaje)
-      else {
+      const vigente = plantilla || plantillaPredeterminada(form.empresaId)
+      const valores = { ...valoresPlantilla, nombre_completo: form.nombre }
+      if (!('edad' in valores) && form.edad !== '') valores.edad = form.edad
+      const preparado = payloadAltaPaciente({
+        empresaId: form.empresaId,
+        estado: form.estado,
+        valores,
+        plantilla: vigente
+      })
+      if (!preparado.ok) {
+        onError(preparado.mensaje)
+        return
+      }
+      const citaPreparada = puedeAgendarCita ? prepararCitaDeAlta(form) : { ok: true, cita: null }
+      if (!citaPreparada.ok) {
+        onError(citaPreparada.mensaje)
+        return
+      }
+      const resultado = await api.guardarEmpleado(preparado.payload)
+      if (!resultado.ok) {
+        onError(resultado.mensaje)
+        return
+      }
+      if (citaPreparada.cita) {
+        const cita = await api.guardarCita({ empleadoId: resultado.datos.id, ...citaPreparada.cita })
+        if (!cita.ok) {
+          onError(`El paciente quedó registrado, pero la cita no se pudo agendar: ${cita.mensaje}`)
+          setForm(VACIO_ALTA)
+          setPlantilla(null)
+          setValoresPlantilla({})
+          setAbierto(false)
+          onGuardado(resultado.datos)
+          return
+        }
+        onError('')
+        onAviso('El paciente quedó registrado y la cita quedó en la agenda. La doctora la verá en la Cola del día de esa fecha. Márquela como presente cuando llegue.')
+      } else {
         onError('')
         onAviso('El paciente quedó registrado.')
-        setForm(VACIO)
-        setAbierto(false)
-        onGuardado(resultado.datos)
       }
+      setForm(VACIO_ALTA)
+      setPlantilla(null)
+      setValoresPlantilla({})
+      setAbierto(false)
+      onGuardado(resultado.datos)
     }}>
       <h3>Alta manual</h3>
       <div className="form-grid">
@@ -158,9 +241,34 @@ function Alta({ api, empresas, onGuardado, onAviso, onError }) {
             {empresas.filter((item) => item.estado === 'activo').map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
           </select>
         </Campo>
-        <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} />
+        {!form.empresaId ? <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} /> : null}
         <CampoEstado valor={form.estado} onCambio={(valor) => setForm({ ...form, estado: valor })} />
+        {columnas.map((columna) => {
+          const input = inputDeCampo(columna)
+          return (
+            <Campo key={columna.clave} etiqueta={columna.etiqueta} requerido={columna.obligatorio}>
+              <input
+                type={input.type}
+                step={input.step}
+                value={valoresPlantilla[columna.clave] ?? ''}
+                onChange={(e) => cambiarCampo(columna.clave, e.target.value)}
+              />
+            </Campo>
+          )
+        })}
+        {puedeAgendarCita ? (
+          <>
+            <Campo etiqueta="Fecha y hora de la cita">
+              <input type="datetime-local" value={form.fechaHoraLocal} onChange={(e) => setForm({ ...form, fechaHoraLocal: e.target.value })} />
+            </Campo>
+            <Campo etiqueta="Motivo">
+              <input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Opcional" />
+            </Campo>
+          </>
+        ) : null}
       </div>
+      {etiquetaPlantilla ? <p className="nota">{etiquetaPlantilla}</p> : <p className="nota">Seleccione la empresa para ver los campos de su plantilla.</p>}
+      {puedeAgendarCita ? <p className="nota">La fecha y la hora son opcionales. Si las indica, la cita queda programada y aparece en la Cola del día de la doctora. El paciente también se puede registrar sin cita.</p> : null}
       <div className="acciones">
         <Boton variante="azul" tipo="submit">Guardar</Boton>
         <Boton variante="linea" onClick={() => setAbierto(false)}>Cancelar</Boton>
