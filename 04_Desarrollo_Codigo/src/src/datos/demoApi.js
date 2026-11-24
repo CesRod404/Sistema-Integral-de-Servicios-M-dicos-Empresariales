@@ -7,7 +7,8 @@ import { vistaEstudio, vistaExpediente } from '../domain/roles.js'
 import { validarCita, validarEmpleado, validarEmpresa, validarEstudio, validarPdf, normalizarCorreo, normalizarTelefono, validarCurp, normalizarEdad } from '../domain/validadores.js'
 import { desdeMexicoInput, hoyMexico } from '../domain/fecha.js'
 import { crearSemilla } from './semilla.js'
-import { MENSAJES_PLANTILLA, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { MENSAJES_PLANTILLA, plantillaPredeterminada, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { pacienteDeFila, resolverPlantilla } from '../domain/atencionPlantilla.js'
 import { prepararEdicionEmpresa, validarCambioEstadoEmpresa } from '../domain/empresas.js'
 
 const CLAVE = 'sisme.demo.v1'
@@ -649,7 +650,7 @@ export function crearApiDemo() {
 
     async obtenerPlantillaEmpresa(empresaId) {
       // CRQ-004: plantilla vigente de la empresa o null si usa la predeterminada.
-      // S7-T11: el doctor también la consulta porque el alta de pacientes muestra sus campos.
+      // S7-T10 / S7-T11: el doctor también la consulta para mostrar los campos en la atención y en el alta.
       const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
@@ -785,12 +786,22 @@ function vistaCita(estado, cita) {
   }
 }
 
+function plantillaDeEmpresa(estado, empresaId) {
+  const vigente = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
+  return vigente
+    ? resolverPlantilla({ ...vigente, columnas: (vigente.columnas || []).map((columna) => ({ ...columna })) }, empresaId)
+    : plantillaPredeterminada(empresaId)
+}
+
 function armarAtencion(estado, citaId, rol) {
   const cita = estado.citas.find((item) => item.id === citaId)
   if (!cita) return null
   const vista = vistaCita(estado, cita)
+  const empleado = estado.empleados.find((item) => item.id === cita.empleadoId)
+  const paciente = empleado ? pacienteDeFila(empleado) : null
+  const plantilla = plantillaDeEmpresa(estado, empleado?.empresaId)
   const expediente = estado.expedientes.find((item) => item.citaId === citaId)
-  if (!expediente) return { cita: vista, expediente: null }
+  if (!expediente) return { cita: vista, expediente: null, paciente, plantilla }
   const detalle = {
     id: expediente.id,
     citaId: expediente.citaId,
@@ -806,7 +817,7 @@ function armarAtencion(estado, citaId, rol) {
       .filter((archivo) => archivo.expedienteId === expediente.id)
       .map((archivo) => ({ id: archivo.id, nombre: archivo.nombre, tamano: archivo.tamano }))
   }
-  return { cita: vista, expediente: vistaExpediente(detalle, rol) }
+  return { cita: vista, expediente: vistaExpediente(detalle, rol), paciente, plantilla }
 }
 
 function vistaCargo(estado, cargo) {

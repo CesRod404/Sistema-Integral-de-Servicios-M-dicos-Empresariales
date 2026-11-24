@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
 import { aMexicoInput, formatearFecha } from '../domain/fecha.js'
+import { inputDeCampo, payloadGuardarPaciente, resolverPlantilla, valoresDesdePaciente } from '../domain/atencionPlantilla.js'
 import { Aviso, Boton, Campo } from '../componentes/Ui.jsx'
+
+const FORM_VACIO = { diagnostico: '', observaciones: '', fechaAtencionLocal: '', estudios: [], valoresPlantilla: {} }
 
 export function Atencion() {
   const { citaId } = useParams()
   const { api } = useSesion()
   const [atencion, setAtencion] = useState(null)
+  const [plantilla, setPlantilla] = useState(null)
+  const [paciente, setPaciente] = useState(null)
   const [estudios, setEstudios] = useState([])
-  const [form, setForm] = useState({ diagnostico: '', observaciones: '', fechaAtencionLocal: '', estudios: [] })
+  const [form, setForm] = useState(FORM_VACIO)
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
 
@@ -20,13 +25,18 @@ export function Atencion() {
       return
     }
     setAtencion(detalle.datos)
+    const vigente = resolverPlantilla(detalle.datos.plantilla, detalle.datos.paciente?.empresaId)
+    const actual = detalle.datos.paciente || null
+    setPlantilla(vigente)
+    setPaciente(actual)
     if (catalogo.ok) setEstudios(catalogo.datos.filter((item) => item.vigente !== false))
     const expediente = detalle.datos.expediente
     setForm({
       diagnostico: expediente?.diagnostico || '',
       observaciones: expediente?.observaciones || '',
       fechaAtencionLocal: expediente?.fechaAtencion ? aMexicoInput(expediente.fechaAtencion).slice(0, 10) : '',
-      estudios: (expediente?.estudios || []).map((item) => item.id)
+      estudios: (expediente?.estudios || []).map((item) => item.id),
+      valoresPlantilla: valoresDesdePaciente(vigente, actual)
     })
   }
 
@@ -38,6 +48,10 @@ export function Atencion() {
   const cerrado = atencion.expediente?.estadoExpediente === 'cerrado'
   const puedeCapturar = atencion.cita.estadoAsistencia === 'presente' && !cerrado
   const estudiosMarcados = new Set(form.estudios)
+  const columnas = plantilla?.columnas || []
+  const etiquetaPlantilla = plantilla?.predeterminada || !plantilla?.version
+    ? 'Plantilla predeterminada de la empresa'
+    : `Plantilla vigente · versión ${plantilla.version}`
 
   function alternar(id) {
     setForm((actual) => ({
@@ -46,18 +60,48 @@ export function Atencion() {
     }))
   }
 
+  function cambiarCampo(clave, valor) {
+    setForm((actual) => ({
+      ...actual,
+      valoresPlantilla: { ...actual.valoresPlantilla, [clave]: valor }
+    }))
+  }
+
+  async function guardarDatosPaciente() {
+    if (!puedeCapturar || !paciente?.id) return { ok: true }
+    const preparado = payloadGuardarPaciente({ paciente, plantilla, valores: form.valoresPlantilla })
+    if (!preparado.ok) return preparado
+    const resultado = await api.guardarEmpleado(preparado.payload)
+    if (!resultado.ok) return resultado
+    const actualizado = { ...paciente, ...resultado.datos, datosExtra: resultado.datos.datosExtra || preparado.payload.datosExtra }
+    setPaciente(actualizado)
+    setForm((actual) => ({ ...actual, valoresPlantilla: valoresDesdePaciente(plantilla, actualizado) }))
+    return { ok: true }
+  }
+
   async function guardar(evento) {
     evento.preventDefault()
+    const pacienteRes = await guardarDatosPaciente()
+    if (!pacienteRes.ok) {
+      setError(pacienteRes.mensaje)
+      return
+    }
     const resultado = await api.guardarAtencion(citaId, form)
     if (!resultado.ok) setError(resultado.mensaje)
     else {
       setError('')
       setMensaje('La atención se guardó. El cierre sigue bloqueado si faltan la fecha o el diagnóstico.')
       setAtencion(resultado.datos)
+      if (resultado.datos.paciente) setPaciente(resultado.datos.paciente)
     }
   }
 
   async function cerrar() {
+    const pacienteRes = await guardarDatosPaciente()
+    if (!pacienteRes.ok) {
+      setError(pacienteRes.mensaje)
+      return
+    }
     const guardado = await api.guardarAtencion(citaId, form)
     if (!guardado.ok) {
       setError(guardado.mensaje)
@@ -112,6 +156,28 @@ export function Atencion() {
       <Aviso tipo="ok">{mensaje}</Aviso>
       {!puedeCapturar && !cerrado ? <Aviso tipo="info">Solo se captura la atención de un paciente presente.</Aviso> : null}
       {cerrado ? <Aviso tipo="info">El expediente está cerrado y ya no admite cambios.</Aviso> : null}
+      {columnas.length ? (
+        <div className="panel">
+          <h3>Datos del paciente</h3>
+          <p className="nota">{etiquetaPlantilla}. Son los mismos campos de la plantilla Excel de la empresa y se pueden editar aquí.</p>
+          <div className="form-grid">
+            {columnas.map((columna) => {
+              const input = inputDeCampo(columna)
+              return (
+                <Campo key={columna.clave} etiqueta={columna.etiqueta} requerido={columna.obligatorio}>
+                  <input
+                    type={input.type}
+                    step={input.step}
+                    value={form.valoresPlantilla[columna.clave] ?? ''}
+                    disabled={!puedeCapturar}
+                    onChange={(e) => cambiarCampo(columna.clave, e.target.value)}
+                  />
+                </Campo>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
       <form className="dos-columnas" onSubmit={guardar}>
         <div className="panel">
           <h3>Datos clínicos</h3>

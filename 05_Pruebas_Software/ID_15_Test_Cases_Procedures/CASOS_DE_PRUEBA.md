@@ -4,7 +4,7 @@ Herramienta automática: Vitest (`npm test` desde la raíz). Los casos manuales 
 
 ## Casos automáticos
 
-Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.test.js` y `plantillaCampos.test.js`.
+Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.test.js`, `pacientes.test.js`, `atencionPlantilla.test.js` y `plantillaCampos.test.js`.
 
 | ID | Qué se comprueba |
 | --- | --- |
@@ -38,5 +38,9 @@ Datos de demostración. Contraseñas en el README. La fecha de las citas sembrad
 | MAN-09 | Importar un `.xlsx` con una fila nueva, un CURP ya existente, un CURP inválido y un nombre sin CURP | La vista previa resalta duplicado e inválido. Confirmar permanece deshabilitado hasta descartar o corregir. El nombre solo puede insertarse |
 | MAN-10 | Recuperar la contraseña de `admin@sisme.local` y de un correo inexistente | El código de demostración solo aparece si el correo está registrado. El mensaje público es el mismo |
 | MAN-11 | Cerrar sesión | Regresa al sitio público y `/app` pide de nuevo el acceso |
-| AUT-13 | S7-T11: al alta, la plantilla de la empresa (o la predeterminada) arma el payload; un obligatorio vacío se rechaza; el doctor también consulta la plantilla |
-| MAN-12 | En el alta de pacientes, elegir una empresa con plantilla propia y otra con la predeterminada | Al cambiar la empresa se redibujan los campos. Los valores se guardan en el empleado, incluidos los personalizados |
+| AUT-13 | S7-T09: el alta sin fecha no crea cita; con fecha y hora la cita queda programada en Pendientes |
+| MAN-12 | Con el administrador, dar de alta un paciente con fecha y hora de cita. Entrar como doctor y abrir la Cola del día en esa fecha | El paciente aparece en Pendientes como programada. La atención se abre cuando se marca presente |
+| AUT-14 | S7-T10: la atención expone los campos de la plantilla vigente y permite editarlos, incluidos los personalizados |
+| MAN-13 | Configurar un campo personalizado en la plantilla de una empresa. Abrir la atención de un paciente presente de esa empresa | Aparece «Datos del paciente» con esos campos, editables. Un obligatorio vacío impide guardar |
+| AUT-15 | S7-T11: al alta, la plantilla de la empresa (o la predeterminada) arma el payload; un obligatorio vacío se rechaza; el doctor también consulta la plantilla |
+| MAN-14 | En el alta de pacientes, elegir una empresa con plantilla propia y otra con la predeterminada | Al cambiar la empresa se redibujan los campos. Los valores se guardan en el empleado, incluidos los personalizados |

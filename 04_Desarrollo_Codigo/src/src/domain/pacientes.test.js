@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizarEdad, validarEmpleado } from './validadores.js'
-import { formularioPaciente } from './pacientes.js'
+import { formularioPaciente, prepararCitaDeAlta } from './pacientes.js'
+import { columnaKanban } from './clinica.js'
+import { diaMexico } from './fecha.js'
 import { crearApiDemo } from '../datos/demoApi.js'
 
 function almacenamiento() {
@@ -14,6 +16,7 @@ function almacenamiento() {
 }
 
 const ADMIN_ID = '00000000-0000-4000-8000-000000000001'
+const DOCTOR_ID = '00000000-0000-4000-8000-000000000002'
 const EMPRESA_ID = '00000000-0000-4000-8000-000000000010'
 const PACIENTE_ID = '00000000-0000-4000-8000-000000000020'
 
@@ -81,5 +84,70 @@ describe('S7-T08 edad del paciente: alta y edición en el CRUD (API demo)', () =
     expect(resultado.mensaje).toBe('La edad debe ser un número entero entre 0 y 120.')
     const lista = await api.consultarPacientesAdmin()
     expect(lista.datos.find((item) => item.id === PACIENTE_ID).edad).toBe(35)
+  })
+})
+
+describe('S7-T09 cita opcional al registrar un paciente', () => {
+  it('no arma cita si la fecha viene vacía', () => {
+    expect(prepararCitaDeAlta({ fechaHoraLocal: '', motivo: 'Ingreso' })).toEqual({ ok: true, cita: null })
+    expect(prepararCitaDeAlta({})).toEqual({ ok: true, cita: null })
+  })
+
+  it('arma la cita con fecha, hora y motivo', () => {
+    expect(prepararCitaDeAlta({ fechaHoraLocal: '2026-11-25T10:30', motivo: ' Periódico ' })).toEqual({
+      ok: true,
+      cita: { fechaHoraLocal: '2026-11-25T10:30', motivo: 'Periódico' }
+    })
+  })
+
+  it('rechaza una fecha u hora inválida', () => {
+    expect(prepararCitaDeAlta({ fechaHoraLocal: '25/11/2026 10:30' }).ok).toBe(false)
+    expect(prepararCitaDeAlta({ fechaHoraLocal: 'ayer' }).mensaje).toBe('Indique una fecha y hora de cita válidas.')
+  })
+})
+
+describe('S7-T09 alta del administrador con cita en la Cola del día (API demo)', () => {
+  let api
+  let local
+
+  beforeEach(() => {
+    local = almacenamiento()
+    vi.stubGlobal('localStorage', local)
+    vi.stubGlobal('sessionStorage', almacenamiento())
+    local.setItem('sisme.demo.sesion', ADMIN_ID)
+    api = crearApiDemo()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('registra al paciente sin cita cuando no se indica fecha', async () => {
+    const alta = await api.guardarEmpleado({ nombre: 'Sin Cita', empresaId: EMPRESA_ID, estado: 'provisional' })
+    expect(alta.ok).toBe(true)
+    const visitas = await api.consultarVisitasAdmin(alta.datos.id)
+    expect(visitas.datos).toHaveLength(0)
+  })
+
+  it('agenda la cita al registrar y el doctor la ve en Pendientes ese día', async () => {
+    const alta = await api.guardarEmpleado({ nombre: 'Con Cita', empresaId: EMPRESA_ID, estado: 'provisional', edad: '29' })
+    expect(alta.ok).toBe(true)
+    const preparado = prepararCitaDeAlta({ fechaHoraLocal: '2026-11-27T11:15', motivo: 'Ingreso' })
+    const cita = await api.guardarCita({ empleadoId: alta.datos.id, ...preparado.cita })
+    expect(cita.ok).toBe(true)
+    expect(cita.datos.estadoAsistencia).toBe('programada')
+    expect(columnaKanban(cita.datos)).toBe('pendientes')
+
+    local.setItem('sisme.demo.sesion', DOCTOR_ID)
+    const agenda = await api.listarCitas('2026-11-27')
+    expect(agenda.ok).toBe(true)
+    const vista = agenda.datos.find((item) => item.empleadoId === alta.datos.id)
+    expect(vista).toMatchObject({
+      empleadoNombre: 'Con Cita',
+      estadoAsistencia: 'programada',
+      motivo: 'Ingreso'
+    })
+    expect(diaMexico(vista.fechaHora)).toBe('2026-11-27')
+    expect(columnaKanban(vista)).toBe('pendientes')
   })
 })

@@ -17,7 +17,7 @@ SISME se usa en español. Hay dos perfiles: Administrador y Doctor.
 ## Administrador
 
 - **Inicio.** Conteos del día y saldo de cobranza.
-- **Pacientes.** Busca por nombre, empresa o CURP. Puede dar de alta un paciente. Al seleccionar la empresa en el alta aparecen automáticamente los campos de su plantilla Excel vigente (o la predeterminada), con los mismos tipos y obligatoriedad (S7-T11, RF-21). Esos datos se guardan en el empleado. **Consultar** abre datos de contacto y la lista de visitas. No muestra diagnóstico, observaciones ni PDF. Puede corregir datos de contacto; no el expediente clínico.
+- **Pacientes.** Busca por nombre, empresa o CURP. Puede dar de alta un paciente. Al seleccionar la empresa en el alta aparecen automáticamente los campos de su plantilla Excel vigente (o la predeterminada), con los mismos tipos y obligatoriedad (S7-T11, RF-21). Esos datos se guardan en el empleado. En el alta el administrador puede indicar, de forma opcional, la fecha, la hora y el motivo de la cita (S7-T09, RF-12). Si lo hace, la cita queda programada y la doctora la ve en la Cola del día de esa fecha. El paciente también se puede registrar sin cita. **Consultar** abre datos de contacto y la lista de visitas. No muestra diagnóstico, observaciones ni PDF. Puede corregir datos de contacto; no el expediente clínico.
 - **Citas.** Elija el día, el empleado y la hora. En la sala de espera use **Presente**, **Ausente**, **Reprogramar** o **Cancelar**. Cancelar conserva el historial.
 - **Empresas.** Alta y edición con contacto, correo, teléfono y dirección. **Dar de baja** deja la empresa inactiva sin borrar citas, expedientes ni cobros.
 - **Importación.** Descargue la plantilla o cargue un `.xlsx`. Elija la empresa, revise el mapeo y la vista previa. Las filas incompletas, con formato inválido o duplicadas impiden confirmar hasta descartarlas, corregirlas o, si ya existen, actualizarlas con la casilla de confirmación. Un empleado puede entrar solo con nombre.
@@ -31,7 +31,7 @@ SISME se usa en español. Hay dos perfiles: Administrador y Doctor.
 
 - El menú muestra Inicio, Pacientes y Citas.
 - **Pacientes** es el tablero del día: Pendientes, En proceso, Finalizado y Ausentes. No hay precios.
-- La atención se abre cuando el Administrador marcó **Presente**. Capture fecha, diagnóstico, observaciones y estudios por nombre. Adjunte uno o más PDF de hasta 5 MB. **Guardar atención** deja el expediente abierto. **Cerrar expediente** exige fecha y diagnóstico, pasa la cita a finalizada y genera el cargo para el Administrador.
+- La atención se abre cuando el Administrador marcó **Presente**. En **Datos del paciente** aparecen los mismos campos de la plantilla Excel vigente de la empresa, ya llenos, y se pueden editar (S7-T10, RF-21). Los obligatorios de la plantilla se validan al guardar o cerrar. Capture también fecha, diagnóstico, observaciones y estudios por nombre. Adjunte uno o más PDF de hasta 5 MB. **Guardar atención** deja el expediente abierto. **Cerrar expediente** exige fecha y diagnóstico, pasa la cita a finalizada y genera el cargo para el Administrador.
 - En **Citas** solo consulta la agenda.
 
 ## Qué no hace el sistema
@@ -39,4 +39,6 @@ SISME se usa en español. Hay dos perfiles: Administrador y Doctor.
 No hay facturación electrónica, pago en línea, ni pantallas de Reportes o Configuración. El Doctor no registra asistencia ni consulta cobranza.
 
 ## Historial de cambios
+- **24/11/2026 — S7-T09.** El alta del administrador permite asignar fecha y hora de cita (opcional, RF-12) para que aparezca en la Cola del día de la doctora. Fusionada a develop en el PR #8 (e393b85).
+- **24/11/2026 — S7-T10.** La pantalla de Atención muestra y deja editar los campos de la plantilla vigente de la empresa (RF-21). Los obligatorios se validan al guardar o cerrar. Fusionada a develop en el PR #9 (714bbe2).
 - **24/11/2026 — S7-T11.** Al registrar un paciente, al elegir la empresa aparecen los campos de su plantilla Excel para llenarlos (RF-21). Aplica al administrador y al doctor. Cambio en la rama `feature/S7-T11-campos-plantilla-en-alta-paciente`, pendiente de fusionar a develop.
