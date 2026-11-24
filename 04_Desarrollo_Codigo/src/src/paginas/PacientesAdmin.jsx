@@ -6,9 +6,11 @@ import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 import { normalizarEdad } from '../domain/validadores.js'
 import { formularioPaciente } from '../domain/pacientes.js'
+import { inputDeCampo, payloadAltaPaciente, plantillaPredeterminada, resolverPlantilla, valoresDesdePaciente } from '../domain/plantillaCampos.js'
 
 // S5-T14: el formulario captura nombre, empresa y estado (SDD §4.1).
 // S7-T08: también captura la edad (opcional, entero de 0 a 120).
+// S7-T11: al elegir empresa se muestran los campos de su plantilla vigente.
 const VACIO = { nombre: '', empresaId: '', estado: 'provisional', edad: '' }
 
 function CampoEstado({ valor, onCambio }) {
@@ -67,8 +69,8 @@ export function PacientesAdmin() {
         <div>
           <h1>Pacientes</h1>
           <p className="nota">{esDoctor
-            ? 'Alta, edición y consulta de pacientes. Al registrar un paciente se abre su atención para adjuntar el examen en PDF.'
-            : 'Alta manual o consulta. El expediente clínico se consulta en solo lectura, sin diagnóstico ni PDF.'}</p>
+            ? 'Alta, edición y consulta de pacientes. Al elegir la empresa aparecen los campos de su plantilla. Al registrar un paciente se abre su atención para adjuntar el examen en PDF.'
+            : 'Alta manual o consulta. Al elegir la empresa aparecen los campos de su plantilla Excel. El expediente clínico se consulta en solo lectura, sin diagnóstico ni PDF.'}</p>
         </div>
         <Alta
           api={api}
@@ -132,19 +134,76 @@ export function PacientesAdmin() {
   )
 }
 
+function columnasDeAlta(plantilla) {
+  return (plantilla?.columnas || []).filter((columna) => columna.clave !== 'nombre_completo')
+}
+
 function Alta({ api, empresas, onGuardado, onAviso, onError }) {
   const [abierto, setAbierto] = useState(false)
   const [form, setForm] = useState(VACIO)
+  const [plantilla, setPlantilla] = useState(null)
+  const [valoresPlantilla, setValoresPlantilla] = useState({})
+
+  useEffect(() => {
+    if (!form.empresaId) {
+      setPlantilla(null)
+      setValoresPlantilla({})
+      return
+    }
+    let vivo = true
+    api.obtenerPlantillaEmpresa(form.empresaId).then((resultado) => {
+      if (!vivo) return
+      if (!resultado.ok) {
+        onError(resultado.mensaje)
+        const fallback = plantillaPredeterminada(form.empresaId)
+        setPlantilla(fallback)
+        setValoresPlantilla(valoresDesdePaciente(fallback, { nombre: form.nombre, edad: form.edad }))
+        return
+      }
+      const vigente = resolverPlantilla(resultado.datos, form.empresaId)
+      setPlantilla(vigente)
+      setValoresPlantilla(valoresDesdePaciente(vigente, { nombre: form.nombre, edad: form.edad }))
+    })
+    return () => { vivo = false }
+  }, [api, form.empresaId])
+
+  function cambiarCampo(clave, valor) {
+    setValoresPlantilla((actual) => ({ ...actual, [clave]: valor }))
+    if (clave === 'edad') setForm((actual) => ({ ...actual, edad: valor }))
+  }
+
   if (!abierto) return <Boton variante="azul" onClick={() => setAbierto(true)}>Nuevo paciente</Boton>
+  const columnas = columnasDeAlta(plantilla)
+  const etiquetaPlantilla = !form.empresaId
+    ? null
+    : (plantilla?.predeterminada || !plantilla?.version
+      ? 'Plantilla predeterminada de la empresa. Complete los campos para el registro.'
+      : `Campos de la plantilla vigente · versión ${plantilla.version}.`)
+
   return (
     <form className="panel" onSubmit={async (evento) => {
       evento.preventDefault()
-      const resultado = await api.guardarEmpleado(form)
+      const vigente = plantilla || plantillaPredeterminada(form.empresaId)
+      const valores = { ...valoresPlantilla, nombre_completo: form.nombre }
+      if (!('edad' in valores) && form.edad !== '') valores.edad = form.edad
+      const preparado = payloadAltaPaciente({
+        empresaId: form.empresaId,
+        estado: form.estado,
+        valores,
+        plantilla: vigente
+      })
+      if (!preparado.ok) {
+        onError(preparado.mensaje)
+        return
+      }
+      const resultado = await api.guardarEmpleado(preparado.payload)
       if (!resultado.ok) onError(resultado.mensaje)
       else {
         onError('')
         onAviso('El paciente quedó registrado.')
         setForm(VACIO)
+        setPlantilla(null)
+        setValoresPlantilla({})
         setAbierto(false)
         onGuardado(resultado.datos)
       }
@@ -158,9 +217,23 @@ function Alta({ api, empresas, onGuardado, onAviso, onError }) {
             {empresas.filter((item) => item.estado === 'activo').map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
           </select>
         </Campo>
-        <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} />
+        {!form.empresaId ? <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} /> : null}
         <CampoEstado valor={form.estado} onCambio={(valor) => setForm({ ...form, estado: valor })} />
+        {columnas.map((columna) => {
+          const input = inputDeCampo(columna)
+          return (
+            <Campo key={columna.clave} etiqueta={columna.etiqueta} requerido={columna.obligatorio}>
+              <input
+                type={input.type}
+                step={input.step}
+                value={valoresPlantilla[columna.clave] ?? ''}
+                onChange={(e) => cambiarCampo(columna.clave, e.target.value)}
+              />
+            </Campo>
+          )
+        })}
       </div>
+      {etiquetaPlantilla ? <p className="nota">{etiquetaPlantilla}</p> : <p className="nota">Seleccione la empresa para ver los campos de su plantilla.</p>}
       <div className="acciones">
         <Boton variante="azul" tipo="submit">Guardar</Boton>
         <Boton variante="linea" onClick={() => setAbierto(false)}>Cancelar</Boton>

@@ -240,6 +240,11 @@ export function crearApiDemo() {
       if ('email' in datos) opcionales.email = datos.email ? normalizarCorreo(datos.email) : null
       if ('telefono' in datos) opcionales.telefono = normalizarTelefono(datos.telefono).valor
       if ('edad' in datos) opcionales.edad = normalizarEdad(datos.edad).valor
+      if ('datosExtra' in datos) {
+        opcionales.datosExtra = datos.datosExtra && typeof datos.datosExtra === 'object' && !Array.isArray(datos.datosExtra)
+          ? { ...datos.datosExtra }
+          : {}
+      }
       const curp = opcionales.curp
       const ocupada = estado.empleados.find((item) => curp && item.curp === curp && item.id !== datos.id)
       if (ocupada) return mal('La CURP ya está registrada. Revise si el paciente es un duplicado.')
@@ -265,6 +270,7 @@ export function crearApiDemo() {
         email: null,
         telefono: null,
         edad: null,
+        datosExtra: {},
         ...opcionales,
         estado: datos.estado || 'provisional',
         fechaRegistro: new Date().toISOString()
@@ -643,7 +649,8 @@ export function crearApiDemo() {
 
     async obtenerPlantillaEmpresa(empresaId) {
       // CRQ-004: plantilla vigente de la empresa o null si usa la predeterminada.
-      const permiso = exigir(usuarioActual(), ['administrador'])
+      // S7-T11: el doctor también la consulta porque el alta de pacientes muestra sus campos.
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
       const vigente = (estado.plantillas || []).find((item) => item.empresaId === empresaId && item.activa)
@@ -753,7 +760,11 @@ function diaDeCita(iso) {
 
 function enriquecerEmpleado(estado, empleado) {
   const empresa = estado.empresas.find((item) => item.id === empleado.empresaId)
-  return { ...empleado, empresaNombre: empresa?.nombre || '—' }
+  return {
+    ...empleado,
+    empresaNombre: empresa?.nombre || '—',
+    datosExtra: empleado.datosExtra && typeof empleado.datosExtra === 'object' ? empleado.datosExtra : {}
+  }
 }
 
 function vistaCita(estado, cita) {

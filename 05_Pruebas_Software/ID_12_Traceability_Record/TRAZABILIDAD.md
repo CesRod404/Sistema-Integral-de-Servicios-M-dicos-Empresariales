@@ -15,6 +15,7 @@ Cada historia del SRS v1.5 apunta a la pantalla, a la regla de dominio y, cuando
 | US-IMP-03 | RF-08 | Filas duplicadas resaltadas | `buscarDuplicado` | Misma clave CURP, clave o nombre |
 | US-IMP-04 | RF-09 | Casilla de sobrescritura | Decisión `actualizar` | El RPC exige `sobrescribir` |
 | US-IMP-05 | RF-10, RF-11 | Filas incompletas o con formato inválido | `clasificarFilas` | El RPC rechaza el lote |
+| US-IMP-07 | RF-21 | Alta en `/app/pacientes` y `/app/empresas/:id/plantilla` | `payloadAltaPaciente` (S7-T11) | `empleados.datos_extra`, `plantillas_empresa` |
 | US-CLI-01 | RF-12 | `/app/citas` | `validarCita` | `programar_cita` |
 | US-CLI-02 | RF-13 | Botones Presente y Ausente | `cambiarAsistencia` | `registrar_asistencia` solo si `es_admin()` |
 | US-CLI-03 | RF-14, RNF-05 | `/app/atencion/:citaId` | `validarPdf` (5 MB) | `registrar_archivo_pdf` y bucket privado |
@@ -26,3 +27,7 @@ Cada historia del SRS v1.5 apunta a la pantalla, a la regla de dominio y, cuando
 | Plan 4.1 | Fuera del SRS | Pestaña Periodo | `LEYENDA_REPORTE_PERIODO` | No hay módulo adicional |
 
 RNF-01 (menos de 5 s), RNF-06, RNF-07, RNF-08 y RNF-10 se cubren en `reglas.test.js` y en la migración SQL. El detalle de casos está en ID 15.
+
+## Historial de cambios (ramas pendientes de fusionar)
+
+- **24/11/2026 — S7-T11.** El alta de pacientes (administrador y doctor) muestra los campos de la plantilla de la empresa elegida. Rama `feature/S7-T11-campos-plantilla-en-alta-paciente`.

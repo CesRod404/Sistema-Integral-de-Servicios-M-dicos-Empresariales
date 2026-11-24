@@ -86,8 +86,16 @@ function mapEmpleado(fila) {
     telefono: fila.telefono,
     estado: fila.estado,
     empresaId: fila.empresa_id,
-    empresaNombre: empresa.nombre || '—'
+    empresaNombre: empresa.nombre || '—',
+    datosExtra: fila.datos_extra && typeof fila.datos_extra === 'object' && !Array.isArray(fila.datos_extra) ? fila.datos_extra : {}
   }
+}
+
+const SELECT_EMPLEADO = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, datos_extra, empresas(nombre)'
+const SELECT_EMPLEADO_SIN_EXTRA = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)'
+
+function esErrorDatosExtra(error) {
+  return /datos_extra|42703/.test(`${error?.code || ''} ${error?.message || ''}`)
 }
 
 export function crearApiSupabase() {
@@ -239,10 +247,29 @@ export function crearApiSupabase() {
       if ('email' in datos) payload.email = datos.email ? normalizarCorreo(datos.email) : null
       if ('telefono' in datos) payload.telefono = normalizarTelefono(datos.telefono).valor
       if ('edad' in datos) payload.edad = normalizarEdad(datos.edad).valor
-      const consulta = datos.id
-        ? supabase.from('empleados').update(payload).eq('id', datos.id).select('id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)').single()
-        : supabase.from('empleados').insert(payload).select('id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)').single()
-      const { data, error } = await consulta
+      if ('datosExtra' in datos) {
+        payload.datos_extra = datos.datosExtra && typeof datos.datosExtra === 'object' && !Array.isArray(datos.datosExtra)
+          ? datos.datosExtra
+          : {}
+      }
+      async function ejecutar(columnas, cuerpo) {
+        const tabla = supabase.from('empleados')
+        const consulta = datos.id
+          ? tabla.update(cuerpo).eq('id', datos.id).select(columnas).single()
+          : tabla.insert(cuerpo).select(columnas).single()
+        return consulta
+      }
+      let { data, error } = await ejecutar(SELECT_EMPLEADO, payload)
+      if (error && payload.datos_extra !== undefined && esErrorDatosExtra(error)) {
+        const { datos_extra, ...sinExtra } = payload
+        const reintento = await ejecutar(SELECT_EMPLEADO_SIN_EXTRA, sinExtra)
+        data = reintento.data
+        error = reintento.error
+      } else if (error && esErrorDatosExtra(error)) {
+        const reintento = await ejecutar(SELECT_EMPLEADO_SIN_EXTRA, payload)
+        data = reintento.data
+        error = reintento.error
+      }
       if (error) return fallo(error)
       return bien(mapEmpleado(data))
     },
@@ -515,7 +542,7 @@ export function crearApiSupabase() {
     async obtenerPlantillaEmpresa(empresaId) {
       // CRQ-004: plantilla vigente de la empresa (tabla plantillas_empresa) o
       // null si la empresa usa la plantilla predeterminada.
-      const permiso = exigir(await usuarioActual(), ['administrador'])
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase
         .from('plantillas_empresa')
