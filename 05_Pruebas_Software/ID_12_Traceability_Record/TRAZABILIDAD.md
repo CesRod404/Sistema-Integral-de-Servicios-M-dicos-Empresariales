@@ -15,7 +15,7 @@ Cada historia del SRS v1.5 apunta a la pantalla, a la regla de dominio y, cuando
 | US-IMP-03 | RF-08 | Filas duplicadas resaltadas | `buscarDuplicado` | Misma clave CURP, clave o nombre |
 | US-IMP-04 | RF-09 | Casilla de sobrescritura | Decisión `actualizar` | El RPC exige `sobrescribir` |
 | US-IMP-05 | RF-10, RF-11 | Filas incompletas o con formato inválido | `clasificarFilas` | El RPC rechaza el lote |
-| US-CLI-01 | RF-12 | `/app/citas` | `validarCita` | `programar_cita` |
+| US-CLI-01 | RF-12 | `/app/citas` y alta en `/app/pacientes` | `validarCita`, `prepararCitaDeAlta` (S7-T09) | `programar_cita` |
 | US-CLI-02 | RF-13 | Botones Presente y Ausente | `cambiarAsistencia` | `registrar_asistencia` solo si `es_admin()` |
 | US-CLI-03 | RF-14, RNF-05, RF-21 | `/app/atencion/:citaId` | `validarPdf` (5 MB), `payloadGuardarPaciente` (S7-T10) | `registrar_archivo_pdf`, `empleados.datos_extra`, plantilla vigente |
 | US-CLI-04 | RF-15 | Cerrar expediente | `validarCierre` | `cerrar_expediente` |
@@ -29,4 +29,5 @@ RNF-01 (menos de 5 s), RNF-06, RNF-07, RNF-08 y RNF-10 se cubren en `reglas.test
 
 ## Historial de cambios (ramas pendientes de fusionar)
 
+- **24/11/2026 — S7-T09.** El alta del administrador puede llamar a `programar_cita` con fecha y hora opcionales. Rama `feature/S7-T09-cita-en-alta-paciente`, fusionada a develop en el PR #8 (e393b85).
 - **24/11/2026 — S7-T10.** La atención muestra y edita los campos de la plantilla vigente (RF-21). Rama `feature/S7-T10-campos-plantilla-en-atencion`.
