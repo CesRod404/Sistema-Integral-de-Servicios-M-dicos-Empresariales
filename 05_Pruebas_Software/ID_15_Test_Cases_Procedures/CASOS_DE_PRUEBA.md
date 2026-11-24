@@ -4,7 +4,7 @@ Herramienta automática: Vitest (`npm test` desde la raíz). Los casos manuales 
 
 ## Casos automáticos
 
-Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js` y `excelImport.test.js`.
+Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.test.js` y `atencionPlantilla.test.js`.
 
 | ID | Qué se comprueba |
 | --- | --- |
@@ -38,3 +38,5 @@ Datos de demostración. Contraseñas en el README. La fecha de las citas sembrad
 | MAN-09 | Importar un `.xlsx` con una fila nueva, un CURP ya existente, un CURP inválido y un nombre sin CURP | La vista previa resalta duplicado e inválido. Confirmar permanece deshabilitado hasta descartar o corregir. El nombre solo puede insertarse |
 | MAN-10 | Recuperar la contraseña de `admin@sisme.local` y de un correo inexistente | El código de demostración solo aparece si el correo está registrado. El mensaje público es el mismo |
 | MAN-11 | Cerrar sesión | Regresa al sitio público y `/app` pide de nuevo el acceso |
+| AUT-13 | S7-T10: la atención expone los campos de la plantilla vigente y permite editarlos, incluidos los personalizados |
+| MAN-12 | Configurar un campo personalizado en la plantilla de una empresa. Abrir la atención de un paciente presente de esa empresa | Aparece «Datos del paciente» con esos campos, editables. Un obligatorio vacío impide guardar |
