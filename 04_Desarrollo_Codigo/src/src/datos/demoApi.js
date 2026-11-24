@@ -650,7 +650,7 @@ export function crearApiDemo() {
 
     async obtenerPlantillaEmpresa(empresaId) {
       // CRQ-004: plantilla vigente de la empresa o null si usa la predeterminada.
-      // S7-T10: el doctor también la consulta para mostrar los campos en la atención.
+      // S7-T10 / S7-T11: el doctor también la consulta para mostrar los campos en la atención y en el alta.
       const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
