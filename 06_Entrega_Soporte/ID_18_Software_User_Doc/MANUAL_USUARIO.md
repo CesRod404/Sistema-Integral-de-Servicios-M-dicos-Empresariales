@@ -30,10 +30,13 @@ SISME se usa en español. Hay dos perfiles: Administrador y Doctor.
 ## Doctor
 
 - El menú muestra Inicio, Pacientes y Citas.
-- **Pacientes** es el tablero del día: Pendientes, En proceso, Finalizado y Ausentes. No hay precios.
-- La atención se abre cuando el Administrador marcó **Presente**. Capture fecha, diagnóstico, observaciones y estudios por nombre. Adjunte uno o más PDF de hasta 5 MB. **Guardar atención** deja el expediente abierto. **Cerrar expediente** exige fecha y diagnóstico, pasa la cita a finalizada y genera el cargo para el Administrador.
-- En **Citas** solo consulta la agenda.
+- **Pacientes** es el tablero del día: Pendientes, En proceso, Finalizado y Ausentes. No hay precios. Desde la Cola del día puede marcar **Presente** o **Ausente** (S7-T12). Si el paciente está presente, abre la atención. No programa, reprograma ni cancela citas.
+- La atención se abre cuando el paciente está marcado **Presente** (lo puede hacer el Administrador o la doctora). Capture fecha, diagnóstico, observaciones y estudios por nombre. Adjunte uno o más PDF de hasta 5 MB. **Guardar atención** deja el expediente abierto. **Cerrar expediente** exige fecha y diagnóstico, pasa la cita a finalizada y genera el cargo para el Administrador.
+- En **Citas** consulta la agenda y puede marcar presente o ausente. Programar, reprogramar o cancelar sigue a cargo del Administrador.
 
 ## Qué no hace el sistema
 
-No hay facturación electrónica, pago en línea, ni pantallas de Reportes o Configuración. El Doctor no registra asistencia ni consulta cobranza.
+No hay facturación electrónica, pago en línea, ni pantallas de Reportes o Configuración. El Doctor no consulta cobranza. El Doctor no programa, reprograma ni cancela citas.
+
+## Historial de cambios
+- **24/11/2026 — S7-T12.** La doctora puede marcar presente o ausente en la Cola del día y en Citas. El SRS v1.6, RF-13, asigna esa facultad al administrador; el equipo lo amplió el 24/11/2026. Requiere aplicar la migración `202611240001_doctora_marca_asistencia.sql` en Supabase para el modo producción. Cambio en la rama `feature/S7-T12-doctora-marca-asistencia`, pendiente de fusionar a develop.

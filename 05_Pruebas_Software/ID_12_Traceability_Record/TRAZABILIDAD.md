@@ -16,7 +16,7 @@ Cada historia del SRS v1.5 apunta a la pantalla, a la regla de dominio y, cuando
 | US-IMP-04 | RF-09 | Casilla de sobrescritura | Decisión `actualizar` | El RPC exige `sobrescribir` |
 | US-IMP-05 | RF-10, RF-11 | Filas incompletas o con formato inválido | `clasificarFilas` | El RPC rechaza el lote |
 | US-CLI-01 | RF-12 | `/app/citas` | `validarCita` | `programar_cita` |
-| US-CLI-02 | RF-13 | Botones Presente y Ausente | `cambiarAsistencia` | `registrar_asistencia` solo si `es_admin()` |
+| US-CLI-02 | RF-13 | Botones Presente y Ausente en Citas y en la Cola del día | `cambiarAsistencia` (S7-T12: administrador o doctor) | `registrar_asistencia` si `es_admin()` o `es_doctor()` (migración `202611240001`; el SRS v1.6 asignaba esto solo al administrador; decisión del equipo del 24/11/2026) |
 | US-CLI-03 | RF-14, RNF-05 | `/app/atencion/:citaId` | `validarPdf` (5 MB) | `registrar_archivo_pdf` y bucket privado |
 | US-CLI-04 | RF-15 | Cerrar expediente | `validarCierre` | `cerrar_expediente` |
 | US-COB-01 | RF-16 | Registrar pago | `aplicarPago` | `registrar_pago` |
@@ -26,3 +26,7 @@ Cada historia del SRS v1.5 apunta a la pantalla, a la regla de dominio y, cuando
 | Plan 4.1 | Fuera del SRS | Pestaña Periodo | `LEYENDA_REPORTE_PERIODO` | No hay módulo adicional |
 
 RNF-01 (menos de 5 s), RNF-06, RNF-07, RNF-08 y RNF-10 se cubren en `reglas.test.js` y en la migración SQL. El detalle de casos está en ID 15.
+
+## Historial de cambios (ramas pendientes de fusionar)
+
+- **24/11/2026 — S7-T12.** La doctora puede marcar presente o ausente. El SRS RF-13 lo asignaba al administrador. Rama `feature/S7-T12-doctora-marca-asistencia`. Pendiente aplicar la migración en Supabase.
