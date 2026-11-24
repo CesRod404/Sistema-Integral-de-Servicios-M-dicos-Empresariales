@@ -30,15 +30,16 @@ SISME se usa en español. Hay dos perfiles: Administrador y Doctor.
 ## Doctor
 
 - El menú muestra Inicio, Pacientes y Citas.
-- **Pacientes** es el tablero del día: Pendientes, En proceso, Finalizado y Ausentes. No hay precios.
-- La atención se abre cuando el Administrador marcó **Presente**. En **Datos del paciente** aparecen los mismos campos de la plantilla Excel vigente de la empresa, ya llenos, y se pueden editar (S7-T10, RF-21). Los obligatorios de la plantilla se validan al guardar o cerrar. Capture también fecha, diagnóstico, observaciones y estudios por nombre. Adjunte uno o más PDF de hasta 5 MB. **Guardar atención** deja el expediente abierto. **Cerrar expediente** exige fecha y diagnóstico, pasa la cita a finalizada y genera el cargo para el Administrador.
-- En **Citas** solo consulta la agenda.
+- **Pacientes** es el tablero del día: Pendientes, En proceso, Finalizado y Ausentes. No hay precios. Desde la Cola del día puede marcar **Presente** o **Ausente** (S7-T12). Si el paciente está presente, abre la atención. No programa, reprograma ni cancela citas.
+- La atención se abre cuando el paciente está marcado **Presente** (lo puede hacer el Administrador o la doctora; SRS v1.7, RF-13). En **Datos del paciente** aparecen los mismos campos de la plantilla Excel vigente de la empresa, ya llenos, y se pueden editar (S7-T10, RF-21). Los obligatorios de la plantilla se validan al guardar o cerrar. Capture también fecha, diagnóstico, observaciones y estudios por nombre. Adjunte uno o más PDF de hasta 5 MB. **Guardar atención** deja el expediente abierto. **Cerrar expediente** exige fecha y diagnóstico, pasa la cita a finalizada y genera el cargo para el Administrador.
+- En **Citas** consulta la agenda y puede marcar presente o ausente. Programar, reprogramar o cancelar sigue a cargo del Administrador.
 
 ## Qué no hace el sistema
 
-No hay facturación electrónica, pago en línea, ni pantallas de Reportes o Configuración. El Doctor no registra asistencia ni consulta cobranza.
+No hay facturación electrónica, pago en línea, ni pantallas de Reportes o Configuración. El Doctor no consulta cobranza. El Doctor no programa, reprograma ni cancela citas.
 
 ## Historial de cambios
 - **24/11/2026 — S7-T09.** El alta del administrador permite asignar fecha y hora de cita (opcional, RF-12) para que aparezca en la Cola del día de la doctora. Fusionada a develop en el PR #8 (e393b85).
 - **24/11/2026 — S7-T10.** La pantalla de Atención muestra y deja editar los campos de la plantilla vigente de la empresa (RF-21). Los obligatorios se validan al guardar o cerrar. Fusionada a develop en el PR #9 (714bbe2).
-- **24/11/2026 — S7-T11.** Al registrar un paciente, al elegir la empresa aparecen los campos de su plantilla Excel para llenarlos (RF-21). Aplica al administrador y al doctor. Cambio en la rama `feature/S7-T11-campos-plantilla-en-alta-paciente`, pendiente de fusionar a develop.
+- **24/11/2026 — S7-T11.** Al registrar un paciente, al elegir la empresa aparecen los campos de su plantilla Excel para llenarlos (RF-21). Aplica al administrador y al doctor. Fusionada a develop en el PR #10 (926cb2b).
+- **24/11/2026 — S7-T12.** La doctora puede marcar presente o ausente en la Cola del día y en Citas. El SRS se actualiza a v1.7 para que el RF-13 incluya al Doctor. La migración `202611240001_doctora_marca_asistencia.sql` se aplica en Supabase tras fusionar. Rama `feature/S7-T12-doctora-marca-asistencia`.

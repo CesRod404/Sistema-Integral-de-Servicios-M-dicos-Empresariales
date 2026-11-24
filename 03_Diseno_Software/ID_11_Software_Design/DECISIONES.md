@@ -9,7 +9,7 @@ Los ocho mockups se usaron solo como referencia visual (color, tipografía y com
 | Tema | Documentos | Decisión |
 | --- | --- | --- |
 | Tercer perfil de recepción | El SDD 5.3 describe un perfil de recepción. El SRS reconoce exactamente Administrador y Doctor (US-ACC-01, RF-03). | No se implementa un tercer rol. La sala de espera la opera el Administrador. |
-| Quién marca presente o ausente | El SRS RF-13 y US-CLI-02 asignan la asistencia al Administrador. Una secuencia del SDD la atribuye al consultorio. | Solo el Administrador cambia `presente` / `ausente`. El Doctor consulta el estado y no lo modifica. |
+| Quién marca presente o ausente | Hasta el SRS v1.6, RF-13 y US-CLI-02 asignaban la asistencia solo al Administrador. El SRS v1.7 lo extiende al Doctor. Una secuencia del SDD la atribuye al consultorio. | Decisión actualizada el 24/11/2026 (S7-T12): el Administrador y el Doctor pueden marcar `presente` / `ausente`. El Doctor no programa, reprograma ni cancela citas. Hasta aplicar `202611240001_doctora_marca_asistencia.sql` en Supabase, la RPC de producción puede rechazar al doctor. |
 | Inicio de sesión | El mockup sugiere usuario. Supabase Auth identifica por correo. | El acceso es por correo y contraseña. |
 
 ## Clínica y confidencialidad
@@ -63,3 +63,7 @@ Los ocho mockups se usaron solo como referencia visual (color, tipografía y com
 El Administrador necesita columnas demográficas sin poder leer la tabla clínica. PostgreSQL no filtra columnas con RLS. Las vistas de administración se definen con `security_invoker = false` y exigen `es_admin()` dentro de la vista. Es intencional: no es un descuido de la opción de seguridad.
 
 Las escrituras de negocio (cita, asistencia, atención, cierre, PDF, pago e importación) pasan por funciones `security definer`. El rol de la sesión se lee de `auth.users.raw_app_meta_data`, no de metadatos editables por el usuario. El valor por defecto al crear el perfil es `doctor`.
+
+## Historial de cambios
+
+- **24/11/2026 — S7-T12.** El equipo acordó que la doctora también marque presente o ausente. El SRS se actualiza a v1.7 para que el RF-13 incluya al Doctor; programar, reprogramar y cancelar sigue siendo del Administrador. Rama `feature/S7-T12-doctora-marca-asistencia`. La migración se aplica en Supabase tras fusionar.

@@ -38,7 +38,7 @@ Configure en Vercel las dos variables `VITE_*` anteriores. Agregue el dominio de
 ## Operación diaria
 
 - El Administrador importa o da de alta empleados, agenda, marca presente o ausente y registra pagos.
-- El Doctor atiende solo a quien ya está presente, adjunta PDF y cierra el expediente. El cierre genera el cargo con la tarifa vigente.
+- El Doctor también puede marcar presente o ausente (S7-T12, decisión del 24/11/2026). Atiende a quien ya está presente, adjunta PDF y cierra el expediente. El cierre genera el cargo con la tarifa vigente. Programar, reprogramar o cancelar citas sigue a cargo del Administrador.
 - Una empresa inactiva conserva citas, expedientes y cobros. No se eliminan registros con historia.
 - Los PDF no tienen URL permanente. El Doctor obtiene una liga firmada de dos minutos.
 

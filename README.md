@@ -57,6 +57,7 @@ VITE_SUPABASE_ANON_KEY=REEMPLAZAR_CON_ANON_KEY
 `04_Desarrollo_Codigo/database/migrations/202610260001_sisme_inicial.sql`
 `04_Desarrollo_Codigo/database/migrations/202610300001_pacientes_doctor.sql`
 `04_Desarrollo_Codigo/database/migrations/202611120001_plantillas_empresa.sql` (CRQ-004: plantillas Excel por empresa)
+`04_Desarrollo_Codigo/database/migrations/202611240001_doctora_marca_asistencia.sql` (S7-T12: el doctor también marca presente o ausente; pendiente de aplicar en Supabase)
 
 La copia de referencia del mismo esquema está en `04_Desarrollo_Codigo/database/schema/sisme_esquema.sql`.
 6. En **Authentication → Providers → Email**, desactive el registro público. Los usuarios los crea un administrador del proyecto.

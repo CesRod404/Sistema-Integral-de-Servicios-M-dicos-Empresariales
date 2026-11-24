@@ -4,7 +4,7 @@ Herramienta automática: Vitest (`npm test` desde la raíz). Los casos manuales 
 
 ## Casos automáticos
 
-Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.test.js`, `pacientes.test.js`, `atencionPlantilla.test.js` y `plantillaCampos.test.js`.
+Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.test.js`, `pacientes.test.js`, `atencionPlantilla.test.js`, `plantillaCampos.test.js` y `asistencia.test.js`.
 
 | ID | Qué se comprueba |
 | --- | --- |
@@ -13,7 +13,7 @@ Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.tes
 | AUT-03 | La vista de estudio quita el precio al doctor y la de expediente quita diagnóstico, observaciones y archivos al administrador |
 | AUT-04 | Contraseña de 8 caracteres con letras y números |
 | AUT-05 | Cinco fallos bloquean 15 minutos; el mensaje de recuperación no revela si el correo existe |
-| AUT-06 | Solo el administrador cambia la asistencia; una cita cerrada o cancelada no cambia |
+| AUT-06 | El administrador o el doctor cambian la asistencia; una cita cerrada o cancelada no cambia (S7-T12) |
 | AUT-07 | El cierre exige fecha de atención y diagnóstico |
 | AUT-08 | El cargo congela el precio aunque el catálogo cambie después |
 | AUT-09 | El pago parcial y el rechazo de un pago mayor al saldo |
@@ -30,7 +30,7 @@ Datos de demostración. Contraseñas en el README. La fecha de las citas sembrad
 | MAN-01 | Abrir `/`, `/servicios` y `/contacto` sin sesión | Textos en español. Servicios sin importes. Agendar una cita lleva a `/login` |
 | MAN-02 | Entrar con contraseña incorrecta y luego con el administrador | Error en español. El menú muestra Inicio, Pacientes, Citas, Empresas, Importación y Cobranza |
 | MAN-03 | Con el administrador, abrir `/app/cobranza` directo y, en otra sesión de doctor, la misma URL | El doctor vuelve a Inicio con aviso de acceso denegado. No ve importes en Pacientes ni en Atención |
-| MAN-04 | En Citas, marcar presente a un paciente programado | El estado cambia en la sala. En el tablero del doctor ese paciente deja de estar bloqueado |
+| MAN-04 | En Citas, con el administrador o con la doctora, marcar presente a un paciente programado | El estado cambia en la sala. En el tablero del doctor ese paciente se puede atender |
 | MAN-05 | Abrir la ficha de un paciente con expediente cerrado | No aparece el diagnóstico ni un enlace para descargar el PDF |
 | MAN-06 | En Cobranza, localizar el cargo de Carlos Martínez (biometría, 200). Cambiar la tarifa de Biometría hemática. Volver a Cargos | El histórico sigue en 200.00 |
 | MAN-07 | Abrir la pestaña Periodo | Se lee exactamente `PENDIENTE DE VALIDAR CONTRA SRS` |
@@ -44,3 +44,6 @@ Datos de demostración. Contraseñas en el README. La fecha de las citas sembrad
 | MAN-13 | Configurar un campo personalizado en la plantilla de una empresa. Abrir la atención de un paciente presente de esa empresa | Aparece «Datos del paciente» con esos campos, editables. Un obligatorio vacío impide guardar |
 | AUT-15 | S7-T11: al alta, la plantilla de la empresa (o la predeterminada) arma el payload; un obligatorio vacío se rechaza; el doctor también consulta la plantilla |
 | MAN-14 | En el alta de pacientes, elegir una empresa con plantilla propia y otra con la predeterminada | Al cambiar la empresa se redibujan los campos. Los valores se guardan en el empleado, incluidos los personalizados |
+| AUT-16 | S7-T12: el doctor marca presente o ausente; no puede cancelar; una cita cerrada no cambia |
+| MAN-15 | Con la doctora, en la Cola del día, marcar presente a un paciente programado y abrir la atención | El paciente pasa a presente y la atención se abre. Ausente lo mueve a Ausentes. No aparecen Reprogramar ni Cancelar |
+| MAN-16 | Si en Supabase aún no se aplica `202611240001_doctora_marca_asistencia.sql`, marcar presente como doctora | El sistema muestra el mensaje de rechazo de la RPC y no cambia el estado |

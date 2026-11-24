@@ -123,11 +123,13 @@ describe('acceso', () => {
 })
 
 describe('asistencia y expediente', () => {
-  it('solo el administrador marca presente o ausente (RF-13)', () => {
+  it('el administrador o el doctor marcan presente o ausente (S7-T12; RF-13 ampliado el 24/11/2026)', () => {
     const cita = { estadoAsistencia: 'programada' }
-    expect(cambiarAsistencia(cita, 'presente', 'doctor').ok).toBe(false)
+    expect(cambiarAsistencia(cita, 'presente', 'doctor')).toEqual({ ok: true, estado: 'presente' })
     expect(cambiarAsistencia(cita, 'ausente', 'administrador')).toEqual({ ok: true, estado: 'ausente' })
+    expect(cambiarAsistencia(cita, 'presente', 'recepcion').ok).toBe(false)
     expect(cambiarAsistencia({ estadoAsistencia: 'cerrada' }, 'presente', 'administrador').ok).toBe(false)
+    expect(cambiarAsistencia({ estadoAsistencia: 'cerrada' }, 'presente', 'doctor').ok).toBe(false)
   })
 
   it('impide cerrar el expediente sin fecha o diagnóstico (RF-15)', () => {

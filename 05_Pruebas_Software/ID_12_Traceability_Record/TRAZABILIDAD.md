@@ -17,7 +17,7 @@ Cada historia del SRS v1.5 apunta a la pantalla, a la regla de dominio y, cuando
 | US-IMP-05 | RF-10, RF-11 | Filas incompletas o con formato inválido | `clasificarFilas` | El RPC rechaza el lote |
 | US-IMP-07 | RF-21 | Alta en `/app/pacientes` y `/app/empresas/:id/plantilla` | `payloadAltaPaciente` (S7-T11) | `empleados.datos_extra`, `plantillas_empresa` |
 | US-CLI-01 | RF-12 | `/app/citas` y alta en `/app/pacientes` | `validarCita`, `prepararCitaDeAlta` (S7-T09) | `programar_cita` |
-| US-CLI-02 | RF-13 | Botones Presente y Ausente | `cambiarAsistencia` | `registrar_asistencia` solo si `es_admin()` |
+| US-CLI-02 | RF-13 | Botones Presente y Ausente en Citas y en la Cola del día | `cambiarAsistencia` (S7-T12: administrador o doctor) | `registrar_asistencia` si `es_admin()` o `es_doctor()` (migración `202611240001`). El SRS v1.7 actualiza el RF-13: el Doctor también marca asistencia; programar, reprogramar y cancelar sigue siendo del Administrador. |
 | US-CLI-03 | RF-14, RNF-05, RF-21 | `/app/atencion/:citaId` | `validarPdf` (5 MB), `payloadGuardarPaciente` (S7-T10) | `registrar_archivo_pdf`, `empleados.datos_extra`, plantilla vigente |
 | US-CLI-04 | RF-15 | Cerrar expediente | `validarCierre` | `cerrar_expediente` |
 | US-COB-01 | RF-16 | Registrar pago | `aplicarPago` | `registrar_pago` |
@@ -32,4 +32,5 @@ RNF-01 (menos de 5 s), RNF-06, RNF-07, RNF-08 y RNF-10 se cubren en `reglas.test
 
 - **24/11/2026 — S7-T09.** El alta del administrador puede llamar a `programar_cita` con fecha y hora opcionales. Rama `feature/S7-T09-cita-en-alta-paciente`, fusionada a develop en el PR #8 (e393b85).
 - **24/11/2026 — S7-T10.** La atención muestra y edita los campos de la plantilla vigente (RF-21). Rama `feature/S7-T10-campos-plantilla-en-atencion`, fusionada a develop en el PR #9 (714bbe2).
-- **24/11/2026 — S7-T11.** El alta de pacientes (administrador y doctor) muestra los campos de la plantilla de la empresa elegida. Rama `feature/S7-T11-campos-plantilla-en-alta-paciente`.
+- **24/11/2026 — S7-T11.** El alta de pacientes (administrador y doctor) muestra los campos de la plantilla de la empresa elegida. Rama `feature/S7-T11-campos-plantilla-en-alta-paciente`, fusionada a develop en el PR #10 (926cb2b).
+- **24/11/2026 — S7-T12.** La doctora puede marcar presente o ausente. El SRS se actualiza a v1.7 para que el RF-13 incluya al Doctor. Rama `feature/S7-T12-doctora-marca-asistencia`. La migración `202611240001_doctora_marca_asistencia.sql` se aplica en Supabase tras fusionar.
