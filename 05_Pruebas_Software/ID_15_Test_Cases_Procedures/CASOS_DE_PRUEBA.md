@@ -58,3 +58,5 @@ Datos de demostración. Contraseñas en el README. La fecha de las citas sembrad
 | MAN-21 | Marcar varios pacientes (o empresas) y pulsar dar de baja | Se pide confirmación. Quedan inactivos y siguen en el listado con su historia |
 | AUT-21 | S7-T18: el lote paga el saldo completo, omite los pagados, exige referencia y fecha, y no paga nada si un cargo no existe |
 | MAN-22 | En Cobranza → Cargos, filtrar «Con saldo», pulsar «Seleccionar todos los del filtro» y «Marcar como pagados» con una referencia | Se confirma el total. Los cargos pasan a Pagado con saldo 0 y el precio histórico no cambia |
+| AUT-22 | S7-T20: solo el administrador edita citas programadas, presentes o ausentes; valida fecha y hora; al cambiar la fecha la asistencia vuelve a programada; no reprograma una cita cerrada; el doctor no puede |
+| MAN-23 | Como administrador, abrir la ficha de un paciente con cita programada, pulsar «Editar cita», cambiar fecha, hora y motivo y guardar | La visita muestra la nueva fecha y el motivo; la cita aparece en Citas y en la Cola del día de la doctora en la nueva fecha. Con la sesión de la doctora no aparece el botón |
