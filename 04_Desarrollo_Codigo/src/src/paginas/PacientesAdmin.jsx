@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
-import { formatearFecha } from '../domain/fecha.js'
+import { aMexicoInput, formatearFecha } from '../domain/fecha.js'
 import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, CasillaTodos, Modal, Vacio } from '../componentes/Ui.jsx'
 import { alternarSeleccion, alternarTodos, estadoSeleccion, resumenNombres, seleccionVisible } from '../domain/seleccion.js'
 import { normalizarEdad } from '../domain/validadores.js'
-import { formularioPaciente, prepararCitaDeAlta } from '../domain/pacientes.js'
+import { citaEditable, formularioEdicionCita, formularioPaciente, prepararCitaDeAlta, prepararEdicionCita } from '../domain/pacientes.js'
 import { marcadorPlantilla } from '../domain/plantillaEmpresa.js'
 import { cambiarEmpresaPaciente, inputDeCampo, payloadAltaPaciente, payloadEdicionPaciente, plantillaPredeterminada, resolverPlantilla, valoresDesdePaciente } from '../domain/plantillaCampos.js'
 
@@ -15,6 +15,7 @@ import { cambiarEmpresaPaciente, inputDeCampo, payloadAltaPaciente, payloadEdici
 // S7-T09: el administrador puede asignar, de forma opcional, fecha y hora de cita.
 // S7-T11: al elegir empresa se muestran los campos de su plantilla vigente.
 // S7-T14: al editar, si cambia la empresa, los campos cambian a la plantilla de la empresa nueva.
+// S7-T20: en la ficha, el administrador edita fecha, hora y motivo de las citas abiertas.
 const VACIO = { nombre: '', empresaId: '', estado: 'provisional', edad: '' }
 const VACIO_ALTA = { ...VACIO, fechaHoraLocal: '', motivo: '' }
 
@@ -368,6 +369,7 @@ export function FichaPaciente() {
   const [descartados, setDescartados] = useState([])
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+  const [edicionCita, setEdicionCita] = useState(null)
 
   async function plantillaDe(empresaId) {
     const resultado = await api.obtenerPlantillaEmpresa(empresaId)
@@ -452,6 +454,32 @@ export function FichaPaciente() {
     }
   }
 
+  async function recargarVisitas() {
+    const resultado = await api.consultarVisitasAdmin(empleadoId)
+    if (resultado.ok) setVisitas(resultado.datos)
+  }
+
+  // S7-T20: reprograma la cita con la misma RPC de la agenda (programar_cita).
+  async function guardarCita(evento) {
+    evento.preventDefault()
+    const preparado = prepararEdicionCita({ ...edicionCita, empleadoId })
+    if (!preparado.ok) {
+      setMensaje('')
+      setError(preparado.mensaje)
+      return
+    }
+    const resultado = await api.guardarCita(preparado.cita)
+    if (!resultado.ok) {
+      setMensaje('')
+      setError(resultado.mensaje)
+      return
+    }
+    setError('')
+    setEdicionCita(null)
+    setMensaje('La cita se actualizó. Si cambió la fecha o la hora, la asistencia vuelve a «Programada» y la doctora la verá en la Cola del día de esa fecha.')
+    await recargarVisitas()
+  }
+
   async function abrirAtencion() {
     // S5-T14 / SRS RF-14: atención del doctor para capturar el examen y adjuntar el PDF.
     const resultado = await api.abrirAtencionDoctor(empleadoId)
@@ -517,14 +545,33 @@ export function FichaPaciente() {
           <Boton variante="azul" tipo="submit">Guardar datos</Boton>
         </div>
       </form>
+      {edicionCita ? (
+        <form className="panel formulario-centrado" onSubmit={guardarCita}>
+          <h3>Editar cita</h3>
+          <div className="form-grid">
+            <Campo etiqueta="Fecha y hora de la cita" requerido>
+              <input type="datetime-local" value={edicionCita.fechaHoraLocal} onChange={(e) => setEdicionCita({ ...edicionCita, fechaHoraLocal: e.target.value })} required />
+            </Campo>
+            <Campo etiqueta="Motivo">
+              <input value={edicionCita.motivo} onChange={(e) => setEdicionCita({ ...edicionCita, motivo: e.target.value })} placeholder="Opcional" />
+            </Campo>
+          </div>
+          <p className="nota">Si cambia la fecha o la hora, la asistencia vuelve a «Programada». Las citas cerradas o canceladas no se editan.</p>
+          <div className="acciones">
+            <Boton variante="azul" tipo="submit">Guardar cita</Boton>
+            <Boton variante="linea" onClick={() => setEdicionCita(null)}>Cancelar</Boton>
+          </div>
+        </form>
+      ) : null}
       <div className="panel tabla-contenedor">
         <h3>Visitas</h3>
         <table>
-          <thead><tr><th>Fecha</th><th>Asistencia</th><th>Expediente</th><th>Estudios</th>{esDoctor ? <th></th> : null}</tr></thead>
+          <thead><tr><th>Fecha</th><th>Motivo</th><th>Asistencia</th><th>Expediente</th><th>Estudios</th><th></th></tr></thead>
           <tbody>
             {visitas.map((visita) => (
               <tr key={visita.citaId}>
                 <td>{formatearFecha(visita.fechaHora, true)}</td>
+                <td>{visita.motivo || '—'}</td>
                 <td><Badge tono={tonoEstado(visita.estadoAsistencia)}>{etiquetaEstado(visita.estadoAsistencia)}</Badge></td>
                 <td>{visita.estadoExpediente ? etiquetaEstado(visita.estadoExpediente) : 'Sin expediente'}</td>
                 <td>{visita.estudiosNombres || '—'}</td>
@@ -532,7 +579,11 @@ export function FichaPaciente() {
                   <td>{['presente', 'cerrada'].includes(visita.estadoAsistencia)
                     ? <Link className="btn btn-linea" to={`/app/atencion/${visita.citaId}`}>Ver atención</Link>
                     : null}</td>
-                ) : null}
+                ) : (
+                  <td>{citaEditable(visita, usuario?.rol)
+                    ? <Boton variante="linea" onClick={() => { setMensaje(''); setEdicionCita(formularioEdicionCita(visita, aMexicoInput)) }}>Editar cita</Boton>
+                    : null}</td>
+                )}
               </tr>
             ))}
           </tbody>

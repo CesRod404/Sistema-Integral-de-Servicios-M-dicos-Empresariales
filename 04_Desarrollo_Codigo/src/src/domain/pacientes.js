@@ -30,3 +30,33 @@ export function prepararCitaDeAlta({ fechaHoraLocal, motivo } = {}) {
     }
   }
 }
+
+// S7-T20: el administrador edita la fecha, la hora y el motivo de una cita del
+// paciente desde su ficha. Solo citas programadas, presentes o ausentes; las
+// cerradas o canceladas ya no se reprograman (misma regla que programar_cita).
+const ESTADOS_CITA_EDITABLE = ['programada', 'presente', 'ausente']
+
+export function citaEditable(visita, rol) {
+  return rol === 'administrador' && ESTADOS_CITA_EDITABLE.includes(visita?.estadoAsistencia)
+}
+
+export function formularioEdicionCita(visita, aInput) {
+  return {
+    citaId: visita.citaId,
+    fechaHoraLocal: aInput(visita.fechaHora),
+    motivo: visita.motivo || ''
+  }
+}
+
+// Devuelve el payload de api.guardarCita (con id, reprograma la cita existente).
+export function prepararEdicionCita({ citaId, empleadoId, fechaHoraLocal, motivo } = {}) {
+  if (!citaId) return { ok: false, mensaje: 'Seleccione la cita que quiere editar.', cita: null }
+  if (!empleadoId) return { ok: false, mensaje: 'Seleccione un empleado ya registrado.', cita: null }
+  const fecha = String(fechaHoraLocal || '').trim()
+  if (!fecha) return { ok: false, mensaje: 'Indique la fecha y la hora de la cita.', cita: null }
+  if (!PATRON_CITA_LOCAL.test(fecha)) return { ok: false, mensaje: 'Indique una fecha y hora de cita válidas.', cita: null }
+  return {
+    ok: true,
+    cita: { id: citaId, empleadoId, fechaHoraLocal: fecha.slice(0, 16), motivo: String(motivo || '').trim() }
+  }
+}
