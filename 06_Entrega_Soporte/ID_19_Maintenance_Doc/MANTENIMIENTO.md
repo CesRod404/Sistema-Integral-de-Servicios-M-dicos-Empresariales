@@ -40,9 +40,9 @@ Vistas `v_pacientes_admin` y `v_visitas_admin` usan `security_invoker = false` a
 3. Pantalla en `src/paginas` y ruta en `App.jsx` solo si el SRS la pide. Si el plan pide algo que el SRS no tiene, márquelo `PENDIENTE DE VALIDAR CONTRA SRS` y anótelo en `DECISIONES.md`.
 4. `npm test` y `npm run build` antes de integrar.
 
-## Migración pendiente (S7-T12)
+## Migración S7-T12 (aplicada)
 
-`04_Desarrollo_Codigo/database/migrations/202611240001_doctora_marca_asistencia.sql` actualiza la función `registrar_asistencia` para admitir `es_admin()` o `es_doctor()`. No cambia políticas RLS de la tabla `citas`. Hay que ejecutarla a mano en el editor SQL de Supabase; hasta entonces, el modo producción rechazará al doctor con el mensaje de la RPC original.
+`04_Desarrollo_Codigo/database/migrations/202611240001_doctora_marca_asistencia.sql` actualiza la función `registrar_asistencia` para admitir `es_admin()` o `es_doctor()`. No cambia políticas RLS de la tabla `citas`. Se aplicó en Supabase el 24/11/2026 (registrada como `doctora_marca_asistencia`), por lo que en modo producción el doctor ya puede marcar presente o ausente.
 
 ## Migraciones S7-T13 a S7-T18
 
