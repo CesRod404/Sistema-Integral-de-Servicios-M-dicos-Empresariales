@@ -4,7 +4,7 @@ Herramienta automática: Vitest (`npm test` desde la raíz). Los casos manuales 
 
 ## Casos automáticos
 
-Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.test.js`, `pacientes.test.js`, `atencionPlantilla.test.js`, `plantillaCampos.test.js` y `asistencia.test.js`.
+Archivos: `04_Desarrollo_Codigo/src/src/domain/reglas.test.js`, `excelImport.test.js`, `pacientes.test.js`, `atencionPlantilla.test.js`, `plantillaCampos.test.js`, `asistencia.test.js`, `curpReutilizada.test.js`, `edicionPacientePlantilla.test.js`, `versionPlantillaPaciente.test.js`, `seleccion.test.js` y `pagoLote.test.js`.
 
 | ID | Qué se comprueba |
 | --- | --- |
@@ -47,3 +47,14 @@ Datos de demostración. Contraseñas en el README. La fecha de las citas sembrad
 | AUT-16 | S7-T12: el doctor marca presente o ausente; no puede cancelar; una cita cerrada no cambia |
 | MAN-15 | Con la doctora, en la Cola del día, marcar presente a un paciente programado y abrir la atención | El paciente pasa a presente y la atención se abre. Ausente lo mueve a Ausentes. No aparecen Reprogramar ni Cancelar |
 | MAN-16 | Si en Supabase aún no se aplica `202611240001_doctora_marca_asistencia.sql`, marcar presente como doctora | El sistema muestra el mensaje de rechazo de la RPC y no cambia el estado |
+| AUT-17 | S7-T13: una columna CURP renombrada («Mina a la que va») se guarda y se valida como texto libre; se exige CURP o Clave de empleado |
+| MAN-17 | En la plantilla de Cantera, con la columna renombrada «Mina a la que va», dar de alta un paciente con una mina | Se guarda sin el error de formato de CURP. El valor aparece en la ficha |
+| AUT-18 | S7-T14: al cambiar la empresa se conservan las claves comunes y se descartan los personalizados de la empresa anterior |
+| MAN-18 | Abrir la ficha de un paciente con campos personalizados y cambiarle la empresa | Se redibujan los campos de la nueva plantilla y se avisa qué datos se quitarán al guardar |
+| AUT-19 | S7-T15: el paciente guarda la versión de plantilla; el marcador indica «Plantilla vN», «Predeterminada» o si hay una vigente más nueva |
+| MAN-19 | Editar la plantilla de una empresa y volver a Pacientes | Los pacientes anteriores muestran su versión y «vigente vN»; al guardar su ficha pasan a la vigente |
+| MAN-20 | Abrir Pacientes, Empresas y Cobranza → Catálogo | El formulario queda centrado, sin un hueco grande al centro |
+| AUT-20 | S7-T17: selección por casillas, «todos» sobre lo visible y baja lógica en lote; el doctor no puede |
+| MAN-21 | Marcar varios pacientes (o empresas) y pulsar dar de baja | Se pide confirmación. Quedan inactivos y siguen en el listado con su historia |
+| AUT-21 | S7-T18: el lote paga el saldo completo, omite los pagados, exige referencia y fecha, y no paga nada si un cargo no existe |
+| MAN-22 | En Cobranza → Cargos, filtrar «Con saldo», pulsar «Seleccionar todos los del filtro» y «Marcar como pagados» con una referencia | Se confirma el total. Los cargos pasan a Pagado con saldo 0 y el precio histórico no cambia |

@@ -39,6 +39,9 @@ Configure en Vercel las dos variables `VITE_*` anteriores. Agregue el dominio de
 
 - El Administrador importa o da de alta empleados, agenda, marca presente o ausente y registra pagos.
 - El Doctor también puede marcar presente o ausente (S7-T12, decisión del 24/11/2026). Atiende a quien ya está presente, adjunta PDF y cierra el expediente. El cierre genera el cargo con la tarifa vigente. Programar, reprogramar o cancelar citas sigue a cargo del Administrador.
+- En Cobranza → Cargos el Administrador puede marcar varios cargos como pagados a la vez (S7-T18): por casillas o con «Seleccionar todos los del filtro». Se pide una referencia y una fecha comunes; cada cargo se paga por su saldo completo.
+- En Pacientes y Empresas se pueden dar de baja varios registros con casillas (S7-T17). Es una baja lógica: no se borra nada.
+- Cada paciente muestra la versión de plantilla con la que se registró (S7-T15). Al editar la plantilla de una empresa, los pacientes anteriores conservan su versión hasta que se guarda su ficha.
 - Una empresa inactiva conserva citas, expedientes y cobros. No se eliminan registros con historia.
 - Los PDF no tienen URL permanente. El Doctor obtiene una liga firmada de dos minutos.
 
