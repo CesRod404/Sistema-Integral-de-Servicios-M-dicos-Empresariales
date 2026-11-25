@@ -2,7 +2,7 @@ import { reiniciarIntentos, registrarFallo, estaBloqueado, solicitarCodigo, veri
 import { validarContrasena } from '../domain/validadores.js'
 import { buscarDuplicado } from '../domain/excelImport.js'
 import { cambiarAsistencia, cancelarCita, validarCierre } from '../domain/clinica.js'
-import { aplicarPago, generarCargos, reportePeriodo } from '../domain/cobranza.js'
+import { aplicarPago, generarCargos, prepararPagoLote, reportePeriodo } from '../domain/cobranza.js'
 import { vistaEstudio, vistaExpediente } from '../domain/roles.js'
 import { validarCita, validarEmpleado, validarEmpresa, validarEstudio, validarPdf, normalizarCorreo, normalizarTelefono, validarCurp, normalizarEdad } from '../domain/validadores.js'
 import { desdeMexicoInput, hoyMexico } from '../domain/fecha.js'
@@ -217,12 +217,58 @@ export function crearApiDemo() {
       return bien(empresa)
     },
 
+    async darDeBajaEmpresas(ids) {
+      // S7-T17: mismo contrato que supabaseApi.darDeBajaEmpresas.
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos una empresa.')
+      const estado = cargar()
+      let actualizados = 0
+      for (const empresa of estado.empresas) {
+        if (lista.includes(empresa.id) && empresa.estado === 'activo') {
+          empresa.estado = 'inactivo'
+          actualizados += 1
+        }
+      }
+      guardar(estado)
+      return bien({ actualizados, omitidos: lista.length - actualizados })
+    },
+
+    async darDeBajaPacientes(ids) {
+      // S7-T17: mismo contrato que supabaseApi.darDeBajaPacientes.
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos un paciente.')
+      const estado = cargar()
+      let actualizados = 0
+      for (const empleado of estado.empleados) {
+        if (lista.includes(empleado.id) && empleado.estado !== 'inactivo') {
+          empleado.estado = 'inactivo'
+          actualizados += 1
+        }
+      }
+      guardar(estado)
+      return bien({ actualizados, omitidos: lista.length - actualizados })
+    },
+
     async listarEmpleados() {
       const usuario = usuarioActual()
       const permiso = exigir(usuario, ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const estado = cargar()
       return bien(estado.empleados.map((empleado) => enriquecerEmpleado(estado, empleado)))
+    },
+
+    async obtenerEmpleado(id) {
+      // S7-T14: mismo contrato que supabaseApi.obtenerEmpleado.
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const empleado = estado.empleados.find((item) => item.id === id)
+      if (!empleado) return mal('El paciente no existe.')
+      return bien(enriquecerEmpleado(estado, empleado))
     },
 
     async guardarEmpleado(datos) {
@@ -246,12 +292,23 @@ export function crearApiDemo() {
           ? { ...datos.datosExtra }
           : {}
       }
+      // S7-T15: versión de la plantilla con la que se capturó; si no se envía, la
+      // vigente de la empresa (misma regla que trg_empleados_plantilla_version).
+      const vigente = (estado.plantillas || []).find((item) => item.empresaId === datos.empresaId && item.activa)
+      const versionVigente = vigente ? vigente.version : 0
+      if ('plantillaVersion' in datos && Number.isInteger(Number(datos.plantillaVersion)) && Number(datos.plantillaVersion) >= 0) {
+        const maxima = (estado.plantillas || []).filter((item) => item.empresaId === datos.empresaId).reduce((maximo, item) => Math.max(maximo, item.version), 0)
+        if (Number(datos.plantillaVersion) > maxima) return mal(`La versión de plantilla ${datos.plantillaVersion} no existe para la empresa del paciente.`)
+        opcionales.plantillaVersion = Number(datos.plantillaVersion)
+      }
       const curp = opcionales.curp
       const ocupada = estado.empleados.find((item) => curp && item.curp === curp && item.id !== datos.id)
       if (ocupada) return mal('La CURP ya está registrada. Revise si el paciente es un duplicado.')
       if (datos.id) {
         const actual = estado.empleados.find((item) => item.id === datos.id)
         if (!actual) return mal('El paciente no existe.')
+        const cambioPlantilla = actual.empresaId !== datos.empresaId || ('datosExtra' in opcionales && JSON.stringify(opcionales.datosExtra) !== JSON.stringify(actual.datosExtra || {}))
+        if (!('plantillaVersion' in opcionales) && cambioPlantilla) opcionales.plantillaVersion = versionVigente
         Object.assign(actual, {
           nombre: datos.nombre.trim(),
           empresaId: datos.empresaId,
@@ -272,6 +329,7 @@ export function crearApiDemo() {
         telefono: null,
         edad: null,
         datosExtra: {},
+        plantillaVersion: versionVigente,
         ...opcionales,
         estado: datos.estado || 'provisional',
         fechaRegistro: new Date().toISOString()
@@ -552,6 +610,34 @@ export function crearApiDemo() {
       return bien(vistaCargo(estado, cargo))
     },
 
+    async registrarPagosLote({ cargoIds, referencia, fecha }) {
+      // S7-T18: mismo contrato que supabaseApi.registrarPagosLote (todo o nada).
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const ids = [...new Set(cargoIds || [])].filter(Boolean)
+      if (ids.some((id) => !estado.cargos.some((cargo) => cargo.id === id))) return mal('Uno de los cargos seleccionados no existe.')
+      const preparado = prepararPagoLote({ cargos: estado.cargos, pagos: estado.pagos, ids, referencia, fecha })
+      if (!preparado.ok) {
+        if (preparado.mensaje === 'Los cargos seleccionados ya están pagados.') return bien({ pagados: 0, omitidos: ids.length, total: 0 })
+        return mal(preparado.mensaje)
+      }
+      for (const pago of preparado.pagos) {
+        const cargo = estado.cargos.find((item) => item.id === pago.cargoId)
+        estado.pagos.push({
+          id: crypto.randomUUID(),
+          cargoId: cargo.id,
+          empresaId: cargo.empresaId,
+          monto: pago.monto,
+          referencia: preparado.referencia,
+          fecha: preparado.fecha
+        })
+        cargo.estatus = 'pagado'
+      }
+      guardar(estado)
+      return bien({ pagados: preparado.pagos.length, omitidos: preparado.omitidos, total: preparado.total })
+    },
+
     async reportePeriodo(desde, hasta) {
       const permiso = exigir(usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
@@ -612,6 +698,7 @@ export function crearApiDemo() {
           actual.telefono = valores.telefono || actual.telefono
           actual.edad = valores.edad ?? actual.edad
           actual.datosExtra = { ...(actual.datosExtra || {}), ...valores.datosExtra }
+          actual.plantillaVersion = plantilla ? plantilla.version : 0
           actualizados += 1
         } else if (duplicado) {
           return mal('Hay duplicados sin decisión. La importación no se confirmó.')
@@ -627,6 +714,7 @@ export function crearApiDemo() {
             telefono: valores.telefono,
             edad: valores.edad,
             datosExtra: valores.datosExtra,
+            plantillaVersion: plantilla ? plantilla.version : 0,
             estado: 'provisional',
             fechaRegistro: new Date().toISOString()
           })
@@ -715,7 +803,9 @@ export function crearApiDemo() {
           ultimaCita: ultima?.fechaHora || null,
           estadoExpediente: expediente?.estadoExpediente || null,
           fechaAtencion: expediente?.fechaAtencion || null,
-          estudiosNombres: nombres.join(', ')
+          estudiosNombres: nombres.join(', '),
+          plantillaVersion: empleado.plantillaVersion ?? versionInferida(estado, empleado),
+          plantillaVersionVigente: (estado.plantillas || []).find((item) => item.empresaId === empleado.empresaId && item.activa)?.version || 0
         }
       })
       return bien(pacientes)
@@ -757,6 +847,15 @@ function diaDeCita(iso) {
   const fecha = new Date(iso)
   const partes = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(fecha)
   return partes
+}
+
+// S7-T15: igual que el respaldo de la migración 202611250002: versión vigente
+// cuando se registró el paciente (0 si la empresa no tenía plantilla propia).
+function versionInferida(estado, empleado) {
+  const registro = empleado.fechaRegistro || ''
+  return (estado.plantillas || [])
+    .filter((item) => item.empresaId === empleado.empresaId && (!registro || String(item.actualizadoEn || '') <= registro))
+    .reduce((maximo, item) => Math.max(maximo, item.version), 0)
 }
 
 function enriquecerEmpleado(estado, empleado) {

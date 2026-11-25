@@ -88,15 +88,18 @@ function mapEmpleado(fila) {
     estado: fila.estado,
     empresaId: fila.empresa_id,
     empresaNombre: empresa.nombre || '—',
+    plantillaVersion: fila.plantilla_version ?? null,
     datosExtra: fila.datos_extra && typeof fila.datos_extra === 'object' && !Array.isArray(fila.datos_extra) ? fila.datos_extra : {}
   }
 }
 
-const SELECT_EMPLEADO = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, datos_extra, empresas(nombre)'
+const SELECT_EMPLEADO = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, datos_extra, plantilla_version, empresas(nombre)'
 const SELECT_EMPLEADO_SIN_EXTRA = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)'
 
+// Mientras no se apliquen las migraciones de CRQ-004 (datos_extra) o de S7-T15
+// (plantilla_version) se reintenta sin esas columnas.
 function esErrorDatosExtra(error) {
-  return /datos_extra|42703/.test(`${error?.code || ''} ${error?.message || ''}`)
+  return /datos_extra|plantilla_version|42703/.test(`${error?.code || ''} ${error?.message || ''}`)
 }
 
 export function crearApiSupabase() {
@@ -219,12 +222,52 @@ export function crearApiSupabase() {
       return bien(mapEmpresa(data))
     },
 
+    async darDeBajaEmpresas(ids) {
+      // S7-T17: baja lógica de varias empresas (mismo efecto que cambiarEstadoEmpresa
+      // a «inactivo»; el borrado físico lo impide trg_empresas_no_delete).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos una empresa.')
+      const { data, error } = await supabase.from('empresas').update({ estado: 'inactivo' }).in('id', lista).eq('estado', 'activo').select('id')
+      if (error) return fallo(error)
+      return bien({ actualizados: (data || []).length, omitidos: lista.length - (data || []).length })
+    },
+
+    async darDeBajaPacientes(ids) {
+      // S7-T17: baja lógica de varios pacientes: quedan «inactivo». Citas,
+      // expedientes y cobros se conservan (trg_empleados_no_delete impide borrar).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos un paciente.')
+      const { data, error } = await supabase.from('empleados').update({ estado: 'inactivo' }).in('id', lista).neq('estado', 'inactivo').select('id')
+      if (error) return fallo(error)
+      return bien({ actualizados: (data || []).length, omitidos: lista.length - (data || []).length })
+    },
+
     async listarEmpleados() {
       const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase.from('empleados').select('id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)').order('nombre')
       if (error) return fallo(error)
       return bien((data || []).map(mapEmpleado))
+    },
+
+    async obtenerEmpleado(id) {
+      // S7-T14: datos completos del paciente (incluye datos_extra) para editarlo
+      // con los campos de la plantilla de su empresa.
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
+      if (permiso) return mal(permiso)
+      let { data, error } = await supabase.from('empleados').select(SELECT_EMPLEADO).eq('id', id).maybeSingle()
+      if (error && esErrorDatosExtra(error)) {
+        const reintento = await supabase.from('empleados').select(SELECT_EMPLEADO_SIN_EXTRA).eq('id', id).maybeSingle()
+        data = reintento.data
+        error = reintento.error
+      }
+      if (error) return fallo(error)
+      if (!data) return mal('El paciente no existe.')
+      return bien(mapEmpleado(data))
     },
 
     async guardarEmpleado(datos) {
@@ -253,6 +296,10 @@ export function crearApiSupabase() {
           ? datos.datosExtra
           : {}
       }
+      // S7-T15: versión de la plantilla con la que se capturó (0 = predeterminada).
+      if ('plantillaVersion' in datos && Number.isInteger(Number(datos.plantillaVersion)) && Number(datos.plantillaVersion) >= 0) {
+        payload.plantilla_version = Number(datos.plantillaVersion)
+      }
       async function ejecutar(columnas, cuerpo) {
         const tabla = supabase.from('empleados')
         const consulta = datos.id
@@ -261,8 +308,8 @@ export function crearApiSupabase() {
         return consulta
       }
       let { data, error } = await ejecutar(SELECT_EMPLEADO, payload)
-      if (error && payload.datos_extra !== undefined && esErrorDatosExtra(error)) {
-        const { datos_extra, ...sinExtra } = payload
+      if (error && (payload.datos_extra !== undefined || payload.plantilla_version !== undefined) && esErrorDatosExtra(error)) {
+        const { datos_extra, plantilla_version, ...sinExtra } = payload
         const reintento = await ejecutar(SELECT_EMPLEADO_SIN_EXTRA, sinExtra)
         data = reintento.data
         error = reintento.error
@@ -533,6 +580,24 @@ export function crearApiSupabase() {
       return bien(true)
     },
 
+    async registrarPagosLote({ cargoIds, referencia, fecha }) {
+      // S7-T18: varios cargos pagados por su saldo completo en una transacción
+      // (RPC registrar_pagos_lote, migración 202611250003_pagos_en_lote.sql).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const ids = [...new Set(cargoIds || [])].filter(Boolean)
+      if (!ids.length) return mal('Seleccione al menos un cargo.')
+      if (!String(referencia || '').trim()) return mal('Capture la referencia del depósito o transferencia.')
+      if (!fecha) return mal('Indique la fecha del pago.')
+      const { data, error } = await supabase.rpc('registrar_pagos_lote', {
+        p_cargo_ids: ids,
+        p_referencia: String(referencia).trim(),
+        p_fecha: fecha
+      })
+      if (error) return fallo(error)
+      return bien({ pagados: Number(data?.pagados) || 0, omitidos: Number(data?.omitidos) || 0, total: Number(data?.total) || 0 })
+    },
+
     async reportePeriodo(desde, hasta) {
       const lista = await this.listarCargos()
       if (!lista.ok) return lista
@@ -631,7 +696,9 @@ export function crearApiSupabase() {
         estadoExpediente: fila.estado_expediente,
         fechaAtencion: fila.fecha_atencion,
         estudiosNombres: fila.estudios_nombres || '',
-        fechaRegistro: fila.fecha_registro || null
+        fechaRegistro: fila.fecha_registro || null,
+        plantillaVersion: fila.plantilla_version ?? null,
+        plantillaVersionVigente: fila.plantilla_version_vigente ?? null
       })))
     },
 

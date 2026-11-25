@@ -51,8 +51,10 @@ describe('CRQ-004 configuración de plantilla Excel por empresa', () => {
   it('protege nombre_completo, CURP y clave de empleado', () => {
     const base = plantillaPredeterminada().columnas
     expect(quitarCampo(base, 'nombre_completo')).toHaveLength(6)
-    expect(quitarCampo(base, 'curp')).toHaveLength(6)
-    expect(quitarCampo(base, 'clave_empleado')).toHaveLength(6)
+    // S7-T13: se puede quitar «CURP» o «Clave de empleado», pero no los dos.
+    expect(quitarCampo(base, 'curp')).toHaveLength(5)
+    expect(quitarCampo(quitarCampo(base, 'curp'), 'clave_empleado')).toHaveLength(5)
+    expect(quitarCampo(quitarCampo(base, 'clave_empleado'), 'curp')).toHaveLength(5)
     expect(editarCampo(base, 'nombre_completo', { obligatorio: false })[0].obligatorio).toBe(true)
     expect(editarCampo(base, 'curp', { obligatorio: true }).find((c) => c.clave === 'curp').obligatorio).toBe(true)
     expect(editarCampo(base, 'edad', { tipo: 'texto' }).find((c) => c.clave === 'edad').tipo).toBe('numero')
@@ -62,7 +64,9 @@ describe('CRQ-004 configuración de plantilla Excel por empresa', () => {
     const nombreOpcional = base.map((c) => (c.clave === 'nombre_completo' ? { ...c, obligatorio: false } : c))
     expect(validarPlantilla(nombreOpcional).errores).toContain(MENSAJES_PLANTILLA.NOMBRE_OBLIGATORIO)
     const sinCurp = base.filter((c) => c.clave !== 'curp')
-    expect(validarPlantilla(sinCurp).errores).toContain(MENSAJES_PLANTILLA.IDENTIFICADOR)
+    expect(validarPlantilla(sinCurp).ok).toBe(true)
+    const sinIdentificador = base.filter((c) => !['curp', 'clave_empleado'].includes(c.clave))
+    expect(validarPlantilla(sinIdentificador).errores).toContain(MENSAJES_PLANTILLA.IDENTIFICADOR)
   })
 
   it('rechaza nombres vacíos o repetidos, claves inválidas y tipos desconocidos', () => {

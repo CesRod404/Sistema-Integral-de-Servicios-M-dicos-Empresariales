@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Icono } from './Iconos.jsx'
 
 export function Boton({ variante = 'azul', children, tipo = 'button', ...props }) {
@@ -46,4 +47,25 @@ export function Modal({ titulo, abierto, onCerrar, children }) {
 
 export function Vacio({ children }) {
   return <p className="vacio">{children}</p>
+}
+
+// S7-T17 / S7-T18: casilla del encabezado para marcar todas las filas visibles.
+// estado: 'todos' | 'algunos' | 'ninguno' (algunos = indeterminada).
+export function CasillaTodos({ estado, onCambio, etiqueta = 'Seleccionar todos', disabled = false }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = estado === 'algunos'
+  }, [estado])
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="casilla-seleccion"
+      aria-label={etiqueta}
+      title={etiqueta}
+      checked={estado === 'todos'}
+      disabled={disabled}
+      onChange={onCambio}
+    />
+  )
 }

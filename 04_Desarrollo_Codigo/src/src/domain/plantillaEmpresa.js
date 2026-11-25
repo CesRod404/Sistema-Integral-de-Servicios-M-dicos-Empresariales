@@ -18,15 +18,16 @@ export const MAX_TEXTO = 250
 
 // Campos base: columnas reales de la tabla empleados. `campo` es la propiedad
 // que usa la importación (excelImport.js). `fijo` = no se puede quitar ni dejar
-// de ser obligatorio (identidad, RN-05). `requeridoEnPlantilla` = no se puede
-// quitar porque RN-06 lo usa para detectar duplicados (CURP / clave).
+// de ser obligatorio (identidad, RN-05). `identificador` = RN-06 lo usa para
+// detectar duplicados (CURP / clave): S7-T13 permite quitar uno de los dos,
+// pero la plantilla debe conservar al menos uno.
 export const CAMPOS_BASE = [
-  { clave: 'nombre_completo', campo: 'nombre', etiqueta: 'Nombre completo', tipo: 'texto', fijo: true, requeridoEnPlantilla: true },
-  { clave: 'curp', campo: 'curp', etiqueta: 'CURP', tipo: 'texto', fijo: false, requeridoEnPlantilla: true },
-  { clave: 'clave_empleado', campo: 'claveEmpleado', etiqueta: 'Clave de empleado', tipo: 'texto', fijo: false, requeridoEnPlantilla: true },
-  { clave: 'email', campo: 'email', etiqueta: 'Correo electrónico', tipo: 'email', fijo: false, requeridoEnPlantilla: false },
-  { clave: 'telefono', campo: 'telefono', etiqueta: 'Teléfono', tipo: 'texto', fijo: false, requeridoEnPlantilla: false },
-  { clave: 'edad', campo: 'edad', etiqueta: 'Edad', tipo: 'numero', fijo: false, requeridoEnPlantilla: false }
+  { clave: 'nombre_completo', campo: 'nombre', etiqueta: 'Nombre completo', tipo: 'texto', fijo: true, requeridoEnPlantilla: true, identificador: false },
+  { clave: 'curp', campo: 'curp', etiqueta: 'CURP', tipo: 'texto', fijo: false, requeridoEnPlantilla: false, identificador: true },
+  { clave: 'clave_empleado', campo: 'claveEmpleado', etiqueta: 'Clave de empleado', tipo: 'texto', fijo: false, requeridoEnPlantilla: false, identificador: true },
+  { clave: 'email', campo: 'email', etiqueta: 'Correo electrónico', tipo: 'email', fijo: false, requeridoEnPlantilla: false, identificador: false },
+  { clave: 'telefono', campo: 'telefono', etiqueta: 'Teléfono', tipo: 'texto', fijo: false, requeridoEnPlantilla: false, identificador: false },
+  { clave: 'edad', campo: 'edad', etiqueta: 'Edad', tipo: 'numero', fijo: false, requeridoEnPlantilla: false, identificador: false }
 ]
 
 const BASE_POR_CLAVE = new Map(CAMPOS_BASE.map((campo) => [campo.clave, campo]))
@@ -36,7 +37,8 @@ export const MENSAJES_PLANTILLA = {
   SIN_COLUMNAS: 'La plantilla debe tener al menos una columna.',
   DEMASIADAS: `La plantilla admite como máximo ${MAX_COLUMNAS} columnas.`,
   NOMBRE_OBLIGATORIO: 'La columna «Nombre completo» siempre va en la plantilla y es obligatoria.',
-  IDENTIFICADOR: 'Las columnas «CURP» y «Clave de empleado» no se pueden quitar: se usan para detectar duplicados.',
+  IDENTIFICADOR: 'La plantilla debe conservar al menos «CURP» o «Clave de empleado»: se usan para detectar duplicados.',
+  CURP_REUTILIZADA: 'La columna «CURP» solo guarda la CURP (18 caracteres) y su nombre debe mencionarla. Para otro dato, quite la CURP y agregue una columna personalizada.',
   ETIQUETA_VACIA: 'Cada columna necesita un nombre visible.',
   ETIQUETA_LARGA: `El nombre de la columna no debe pasar de ${MAX_ETIQUETA} caracteres.`,
   ETIQUETA_REPETIDA: 'Hay dos columnas con el mismo nombre visible.',
@@ -99,9 +101,46 @@ export function infoCampoBase(clave) {
   return BASE_POR_CLAVE.get(clave) || null
 }
 
-export function puedeQuitarse(columna) {
+// S7-T13: «CURP» o «Clave de empleado» se pueden quitar mientras quede el otro.
+export function puedeQuitarse(columna, columnas = null) {
   const base = BASE_POR_CLAVE.get(columna?.clave)
-  return !base || !base.requeridoEnPlantilla
+  if (!base) return true
+  if (base.requeridoEnPlantilla) return false
+  if (!base.identificador) return true
+  if (!Array.isArray(columnas)) return false
+  return columnas.some((otra) => otra.clave !== columna.clave && BASE_POR_CLAVE.get(otra.clave)?.identificador)
+}
+
+// S7-T13 (bug «Mina a la que va»): la clave interna «curp» siempre se valida
+// como CURP (18 caracteres) y se guarda en empleados.curp. Si el administrador
+// le cambia el nombre a otro dato, deja de ser CURP: se convierte en una
+// columna personalizada de texto con clave propia (misma regla que la migración
+// 202611250001_curp_reutilizada_plantilla.sql).
+export function etiquetaEsCurp(etiqueta) {
+  const texto = quitarAcentos(String(etiqueta || '')).toLowerCase()
+  return /curp/.test(texto) || /clave unica de registro/.test(texto)
+}
+
+export function esCurpReutilizada(columna) {
+  return columna?.clave === 'curp' && Boolean(String(columna?.etiqueta || '').trim()) && !etiquetaEsCurp(columna.etiqueta)
+}
+
+export function convertirCurpReutilizada(columnas) {
+  const lista = Array.isArray(columnas) ? columnas : []
+  // Con dos columnas «curp» no se convierte nada: validarPlantilla reporta la clave repetida.
+  const reutilizada = lista.filter((columna) => columna?.clave === 'curp').length === 1 ? lista.find(esCurpReutilizada) : null
+  if (!reutilizada) return { columnas: lista, convertida: null }
+  const resto = lista.filter((columna) => columna !== reutilizada)
+  const etiqueta = String(reutilizada.etiqueta).replace(/\s+/g, ' ').trim()
+  const nueva = {
+    clave: claveUnica(etiqueta, resto),
+    etiqueta,
+    tipo: 'texto',
+    obligatorio: Boolean(reutilizada.obligatorio),
+    orden: reutilizada.orden,
+    personalizado: true
+  }
+  return { columnas: lista.map((columna) => (columna === reutilizada ? nueva : columna)), convertida: nueva }
 }
 
 export function puedeCambiarObligatorio(columna) {
@@ -134,13 +173,14 @@ function normalizarColumna(columna) {
 // normalizadas (orden 1..n) o la lista de mensajes de error.
 export function validarPlantilla(columnas) {
   const errores = new Set()
-  const lista = Array.isArray(columnas) ? columnas.map(normalizarColumna) : []
+  const { columnas: revisadas, convertida } = convertirCurpReutilizada(Array.isArray(columnas) ? columnas : [])
+  const lista = Array.isArray(columnas) ? revisadas.map(normalizarColumna) : []
   if (!lista.length) errores.add(MENSAJES_PLANTILLA.SIN_COLUMNAS)
   if (lista.length > MAX_COLUMNAS) errores.add(MENSAJES_PLANTILLA.DEMASIADAS)
 
   const nombre = lista.find((columna) => columna.clave === 'nombre_completo')
   if (!nombre || !nombre.obligatorio) errores.add(MENSAJES_PLANTILLA.NOMBRE_OBLIGATORIO)
-  if (!lista.some((columna) => columna.clave === 'curp') || !lista.some((columna) => columna.clave === 'clave_empleado')) {
+  if (!lista.some((columna) => columna.clave === 'curp' || columna.clave === 'clave_empleado')) {
     errores.add(MENSAJES_PLANTILLA.IDENTIFICADOR)
   }
 
@@ -164,12 +204,15 @@ export function validarPlantilla(columnas) {
     }
   }
 
-  if (errores.size) return { ok: false, errores: [...errores], columnas: [] }
+  const avisos = convertida
+    ? [`«${convertida.etiqueta}» ya no es CURP: se guardará como columna personalizada de texto (clave ${convertida.clave}) y no se validará como CURP.`]
+    : []
+  if (errores.size) return { ok: false, errores: [...errores], avisos, columnas: [] }
   const normalizadas = ordenarColumnas(lista).map(({ tipoRecibido, ...columna }) => ({
     ...columna,
     personalizado: !BASE_POR_CLAVE.has(columna.clave)
   }))
-  return { ok: true, errores: [], columnas: normalizadas }
+  return { ok: true, errores: [], avisos, columnas: normalizadas }
 }
 
 // Operaciones de edición (pantalla de configuración). Todas devuelven una lista nueva.
@@ -209,7 +252,7 @@ export function editarCampo(columnas, clave, cambios = {}) {
 export function quitarCampo(columnas, clave) {
   const lista = ordenarColumnas(columnas)
   const columna = lista.find((item) => item.clave === clave)
-  if (!columna || !puedeQuitarse(columna)) return lista
+  if (!columna || !puedeQuitarse(columna, lista)) return lista
   return ordenarColumnas(lista.filter((item) => item.clave !== clave))
 }
 
@@ -233,6 +276,27 @@ export function camposBaseDisponibles(columnas) {
 // La versión 0 es la plantilla predeterminada (sin configuración propia).
 export function siguienteVersion(actual) {
   return (Number(actual?.version) || 0) + 1
+}
+
+// S7-T15: marcador de la versión de plantilla con la que se capturó al paciente.
+// 0 = plantilla predeterminada; null = sin dato (registro anterior a la versión).
+export function marcadorPlantilla({ plantillaVersion, plantillaVersionVigente } = {}) {
+  const tiene = plantillaVersion !== null && plantillaVersion !== undefined && plantillaVersion !== ''
+  const version = tiene ? Number(plantillaVersion) : null
+  const vigente = Number(plantillaVersionVigente) || 0
+  if (version === null || !Number.isFinite(version)) {
+    return { texto: 'Sin versión', tono: 'neutro', desactualizada: false, detalle: 'No se registró con qué plantilla se capturó.' }
+  }
+  const texto = version === 0 ? 'Predeterminada' : `Plantilla v${version}`
+  const desactualizada = version < vigente
+  return {
+    texto: desactualizada ? `${texto} · vigente v${vigente}` : texto,
+    tono: desactualizada ? 'ambar' : (version === 0 ? 'neutro' : 'azul'),
+    desactualizada,
+    detalle: desactualizada
+      ? `Capturado con ${version === 0 ? 'la plantilla predeterminada' : `la versión ${version}`}; la plantilla vigente de la empresa es la versión ${vigente}. Al editar y guardar se actualiza.`
+      : (version === 0 ? 'Capturado con la plantilla predeterminada.' : `Capturado con la versión vigente (${version}).`)
+  }
 }
 
 export function encabezadoDe(columna) {

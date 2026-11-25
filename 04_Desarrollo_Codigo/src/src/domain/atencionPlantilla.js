@@ -1,7 +1,7 @@
 // S7-T10: los campos de la plantilla vigente de la empresa se muestran y
 // editan en la atención del doctor. Reutiliza las reglas de tipo y
 // obligatoriedad de la importación (RF-21) sobre los datos del empleado.
-import { infoCampoBase, ordenarColumnas, plantillaPredeterminada } from './plantillaEmpresa.js'
+import { convertirCurpReutilizada, infoCampoBase, ordenarColumnas, plantillaPredeterminada } from './plantillaEmpresa.js'
 import { validarValorTipo } from './importacionPlantilla.js'
 import { validarCurp, validarCorreo, normalizarCorreo, normalizarTelefono, normalizarEdad } from './validadores.js'
 
@@ -9,9 +9,11 @@ function vacio(valor) {
   return valor == null || String(valor).trim() === ''
 }
 
+// S7-T13: una columna «curp» renombrada a otro dato (p. ej. «Mina a la que va»)
+// se trata como columna personalizada de texto y no se valida como CURP.
 export function resolverPlantilla(plantilla, empresaId) {
   if (plantilla && Array.isArray(plantilla.columnas) && plantilla.columnas.length) {
-    return { ...plantilla, columnas: ordenarColumnas(plantilla.columnas) }
+    return { ...plantilla, columnas: ordenarColumnas(convertirCurpReutilizada(plantilla.columnas).columnas) }
   }
   return plantillaPredeterminada(empresaId)
 }
@@ -74,13 +76,16 @@ export function payloadGuardarPaciente({ paciente, plantilla, valores } = {}) {
   if (!paciente?.id || !paciente?.empresaId) {
     return { ok: false, mensaje: 'No se pudieron cargar los datos del paciente.', payload: null }
   }
-  const columnas = ordenarColumnas(resolverPlantilla(plantilla, paciente.empresaId).columnas)
+  const vigente = resolverPlantilla(plantilla, paciente.empresaId)
+  const columnas = ordenarColumnas(vigente.columnas)
   const payload = {
     id: paciente.id,
     empresaId: paciente.empresaId,
     estado: paciente.estado,
     nombre: paciente.nombre,
-    datosExtra: { ...(paciente.datosExtra || {}) }
+    datosExtra: { ...(paciente.datosExtra || {}) },
+    // S7-T15: versión de la plantilla con la que se capturan los datos (0 = predeterminada).
+    plantillaVersion: Number(vigente.version) || 0
   }
   const errores = []
 
@@ -124,6 +129,7 @@ export function pacienteDeFila(empleado = {}) {
     telefono: empleado.telefono,
     estado: empleado.estado,
     empresaId: empleado.empresaId ?? empleado.empresa_id ?? null,
+    plantillaVersion: empleado.plantillaVersion ?? empleado.plantilla_version ?? null,
     datosExtra: empleado.datosExtra && typeof empleado.datosExtra === 'object' && !Array.isArray(empleado.datosExtra)
       ? empleado.datosExtra
       : (empleado.datos_extra && typeof empleado.datos_extra === 'object' && !Array.isArray(empleado.datos_extra) ? empleado.datos_extra : {})
