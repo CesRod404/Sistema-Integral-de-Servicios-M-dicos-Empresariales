@@ -8,11 +8,11 @@ export {
   inputDeCampo,
   pacienteDeFila,
   payloadGuardarPaciente,
-  plantillaPredeterminada,
   resolverPlantilla,
   valorPacienteParaCampo,
   valoresDesdePaciente
 } from './atencionPlantilla.js'
+export { plantillaPredeterminada } from './plantillaEmpresa.js'
 
 // Alta de paciente: mismas reglas de la plantilla, sin identificador previo.
 export function payloadAltaPaciente({ empresaId, estado, valores, plantilla } = {}) {
