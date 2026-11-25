@@ -88,15 +88,18 @@ function mapEmpleado(fila) {
     estado: fila.estado,
     empresaId: fila.empresa_id,
     empresaNombre: empresa.nombre || '—',
+    plantillaVersion: fila.plantilla_version ?? null,
     datosExtra: fila.datos_extra && typeof fila.datos_extra === 'object' && !Array.isArray(fila.datos_extra) ? fila.datos_extra : {}
   }
 }
 
-const SELECT_EMPLEADO = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, datos_extra, empresas(nombre)'
+const SELECT_EMPLEADO = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, datos_extra, plantilla_version, empresas(nombre)'
 const SELECT_EMPLEADO_SIN_EXTRA = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)'
 
+// Mientras no se apliquen las migraciones de CRQ-004 (datos_extra) o de S7-T15
+// (plantilla_version) se reintenta sin esas columnas.
 function esErrorDatosExtra(error) {
-  return /datos_extra|42703/.test(`${error?.code || ''} ${error?.message || ''}`)
+  return /datos_extra|plantilla_version|42703/.test(`${error?.code || ''} ${error?.message || ''}`)
 }
 
 export function crearApiSupabase() {
@@ -269,6 +272,10 @@ export function crearApiSupabase() {
           ? datos.datosExtra
           : {}
       }
+      // S7-T15: versión de la plantilla con la que se capturó (0 = predeterminada).
+      if ('plantillaVersion' in datos && Number.isInteger(Number(datos.plantillaVersion)) && Number(datos.plantillaVersion) >= 0) {
+        payload.plantilla_version = Number(datos.plantillaVersion)
+      }
       async function ejecutar(columnas, cuerpo) {
         const tabla = supabase.from('empleados')
         const consulta = datos.id
@@ -277,8 +284,8 @@ export function crearApiSupabase() {
         return consulta
       }
       let { data, error } = await ejecutar(SELECT_EMPLEADO, payload)
-      if (error && payload.datos_extra !== undefined && esErrorDatosExtra(error)) {
-        const { datos_extra, ...sinExtra } = payload
+      if (error && (payload.datos_extra !== undefined || payload.plantilla_version !== undefined) && esErrorDatosExtra(error)) {
+        const { datos_extra, plantilla_version, ...sinExtra } = payload
         const reintento = await ejecutar(SELECT_EMPLEADO_SIN_EXTRA, sinExtra)
         data = reintento.data
         error = reintento.error
@@ -647,7 +654,9 @@ export function crearApiSupabase() {
         estadoExpediente: fila.estado_expediente,
         fechaAtencion: fila.fecha_atencion,
         estudiosNombres: fila.estudios_nombres || '',
-        fechaRegistro: fila.fecha_registro || null
+        fechaRegistro: fila.fecha_registro || null,
+        plantillaVersion: fila.plantilla_version ?? null,
+        plantillaVersionVigente: fila.plantilla_version_vigente ?? null
       })))
     },
 

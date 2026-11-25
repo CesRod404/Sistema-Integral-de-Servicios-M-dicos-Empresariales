@@ -76,13 +76,16 @@ export function payloadGuardarPaciente({ paciente, plantilla, valores } = {}) {
   if (!paciente?.id || !paciente?.empresaId) {
     return { ok: false, mensaje: 'No se pudieron cargar los datos del paciente.', payload: null }
   }
-  const columnas = ordenarColumnas(resolverPlantilla(plantilla, paciente.empresaId).columnas)
+  const vigente = resolverPlantilla(plantilla, paciente.empresaId)
+  const columnas = ordenarColumnas(vigente.columnas)
   const payload = {
     id: paciente.id,
     empresaId: paciente.empresaId,
     estado: paciente.estado,
     nombre: paciente.nombre,
-    datosExtra: { ...(paciente.datosExtra || {}) }
+    datosExtra: { ...(paciente.datosExtra || {}) },
+    // S7-T15: versión de la plantilla con la que se capturan los datos (0 = predeterminada).
+    plantillaVersion: Number(vigente.version) || 0
   }
   const errores = []
 
@@ -126,6 +129,7 @@ export function pacienteDeFila(empleado = {}) {
     telefono: empleado.telefono,
     estado: empleado.estado,
     empresaId: empleado.empresaId ?? empleado.empresa_id ?? null,
+    plantillaVersion: empleado.plantillaVersion ?? empleado.plantilla_version ?? null,
     datosExtra: empleado.datosExtra && typeof empleado.datosExtra === 'object' && !Array.isArray(empleado.datosExtra)
       ? empleado.datosExtra
       : (empleado.datos_extra && typeof empleado.datos_extra === 'object' && !Array.isArray(empleado.datos_extra) ? empleado.datos_extra : {})

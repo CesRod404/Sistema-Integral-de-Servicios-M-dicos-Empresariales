@@ -278,6 +278,27 @@ export function siguienteVersion(actual) {
   return (Number(actual?.version) || 0) + 1
 }
 
+// S7-T15: marcador de la versión de plantilla con la que se capturó al paciente.
+// 0 = plantilla predeterminada; null = sin dato (registro anterior a la versión).
+export function marcadorPlantilla({ plantillaVersion, plantillaVersionVigente } = {}) {
+  const tiene = plantillaVersion !== null && plantillaVersion !== undefined && plantillaVersion !== ''
+  const version = tiene ? Number(plantillaVersion) : null
+  const vigente = Number(plantillaVersionVigente) || 0
+  if (version === null || !Number.isFinite(version)) {
+    return { texto: 'Sin versión', tono: 'neutro', desactualizada: false, detalle: 'No se registró con qué plantilla se capturó.' }
+  }
+  const texto = version === 0 ? 'Predeterminada' : `Plantilla v${version}`
+  const desactualizada = version < vigente
+  return {
+    texto: desactualizada ? `${texto} · vigente v${vigente}` : texto,
+    tono: desactualizada ? 'ambar' : (version === 0 ? 'neutro' : 'azul'),
+    desactualizada,
+    detalle: desactualizada
+      ? `Capturado con ${version === 0 ? 'la plantilla predeterminada' : `la versión ${version}`}; la plantilla vigente de la empresa es la versión ${vigente}. Al editar y guardar se actualiza.`
+      : (version === 0 ? 'Capturado con la plantilla predeterminada.' : `Capturado con la versión vigente (${version}).`)
+  }
+}
+
 export function encabezadoDe(columna) {
   return columna.obligatorio ? `${columna.etiqueta} *` : columna.etiqueta
 }

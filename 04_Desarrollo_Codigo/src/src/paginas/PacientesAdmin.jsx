@@ -6,6 +6,7 @@ import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 import { normalizarEdad } from '../domain/validadores.js'
 import { formularioPaciente, prepararCitaDeAlta } from '../domain/pacientes.js'
+import { marcadorPlantilla } from '../domain/plantillaEmpresa.js'
 import { cambiarEmpresaPaciente, inputDeCampo, payloadAltaPaciente, payloadEdicionPaciente, plantillaPredeterminada, resolverPlantilla, valoresDesdePaciente } from '../domain/plantillaCampos.js'
 
 // S5-T14: el formulario captura nombre, empresa y estado (SDD §4.1).
@@ -113,7 +114,7 @@ export function PacientesAdmin() {
         <table>
           <thead>
             <tr>
-              <th>ID</th><th>Nombre</th><th>Edad</th><th>Empresa</th><th>Fecha de registro</th><th>Estudios</th><th>Estado</th><th>Última atención</th><th></th>
+              <th>ID</th><th>Nombre</th><th>Edad</th><th>Empresa</th><th>Plantilla</th><th>Fecha de registro</th><th>Estudios</th><th>Estado</th><th>Última atención</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -123,6 +124,7 @@ export function PacientesAdmin() {
                 <td>{paciente.nombre}</td>
                 <td>{paciente.edad ?? '—'}</td>
                 <td>{paciente.empresaNombre}</td>
+                <td><MarcadorPlantilla paciente={paciente} /></td>
                 <td>{formatearFecha(paciente.fechaRegistro)}</td>
                 <td>{paciente.estudiosNombres || '—'}</td>
                 <td>{paciente.estadoCita ? <Badge tono={tonoEstado(paciente.estadoCita)}>{etiquetaEstado(paciente.estadoCita)}</Badge> : '—'}</td>
@@ -136,6 +138,12 @@ export function PacientesAdmin() {
       </div>
     </section>
   )
+}
+
+// S7-T15: «Plantilla v2», «Predeterminada» o «v1 · vigente v2» si quedó desactualizado.
+function MarcadorPlantilla({ paciente }) {
+  const marcador = marcadorPlantilla(paciente || {})
+  return <span title={marcador.detalle}><Badge tono={marcador.tono}>{marcador.texto}</Badge></span>
 }
 
 function columnasDeAlta(plantilla) {
@@ -367,7 +375,7 @@ export function FichaPaciente() {
     } else {
       setError('')
       const empresaNombre = empresas.find((item) => item.id === resultado.datos.empresaId)?.nombre || resultado.datos.empresaNombre
-      const actualizado = { ...paciente, ...resultado.datos, empresaNombre }
+      const actualizado = { ...paciente, ...resultado.datos, empresaNombre, plantillaVersionVigente: Number(plantilla?.version) || 0 }
       setPaciente(actualizado)
       setForm(formularioPaciente(actualizado))
       setValoresPlantilla(valoresDesdePaciente(plantilla, actualizado))
@@ -394,6 +402,7 @@ export function FichaPaciente() {
         <div>
           <h1>Consulta de paciente</h1>
           <p className="nota">{paciente.folio} · {paciente.nombre} · Edad: {paciente.edad ?? '—'} · Fecha de registro: {formatearFecha(paciente.fechaRegistro)}</p>
+          <p><MarcadorPlantilla paciente={paciente} /> <small className="nota">{marcadorPlantilla(paciente).detalle}</small></p>
         </div>
         <div className="acciones">
           {esDoctor ? <Boton variante="azul" onClick={abrirAtencion}>Atender y adjuntar PDF</Boton> : null}
