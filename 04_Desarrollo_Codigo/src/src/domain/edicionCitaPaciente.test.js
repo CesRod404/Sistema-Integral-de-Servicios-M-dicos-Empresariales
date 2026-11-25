@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { citaEditable, formularioEdicionCita, prepararEdicionCita } from './pacientes.js'
+import { citaAbierta, citaEditable, formularioEdicionCita, formularioNuevaCita, prepararEdicionCita } from './pacientes.js'
 import { aMexicoInput } from './fecha.js'
 import { crearApiDemo } from '../datos/demoApi.js'
 
@@ -51,6 +51,31 @@ describe('S7-T20 edición de cita desde pacientes (dominio)', () => {
   })
 })
 
+describe('S7-T20 panel de cita en la ficha (dominio)', () => {
+  const ahora = new Date('2026-11-25T18:00:00Z')
+
+  it('muestra la próxima cita abierta, o la más reciente si ya pasaron todas', () => {
+    const visitas = [
+      { citaId: 'a', fechaHora: '2026-11-20T15:00:00Z', estadoAsistencia: 'cerrada' },
+      { citaId: 'b', fechaHora: '2026-11-24T15:00:00Z', estadoAsistencia: 'presente' },
+      { citaId: 'c', fechaHora: '2026-11-28T15:00:00Z', estadoAsistencia: 'programada' },
+      { citaId: 'd', fechaHora: '2026-12-05T15:00:00Z', estadoAsistencia: 'programada' }
+    ]
+    expect(citaAbierta(visitas, ahora).citaId).toBe('c')
+    expect(citaAbierta(visitas.slice(0, 2), ahora).citaId).toBe('b')
+    expect(citaAbierta([visitas[0]], ahora)).toBeNull()
+    expect(citaAbierta([], ahora)).toBeNull()
+  })
+
+  it('sin cita abierta permite agendar una nueva (sin id)', () => {
+    const form = { ...formularioNuevaCita(), fechaHoraLocal: '2026-11-27T09:00', motivo: 'Ingreso' }
+    expect(prepararEdicionCita({ ...form, empleadoId: 'e1' })).toEqual({
+      ok: true,
+      cita: { empleadoId: 'e1', fechaHoraLocal: '2026-11-27T09:00', motivo: 'Ingreso' }
+    })
+  })
+})
+
 describe('S7-T20 edición de cita desde pacientes (API demo)', () => {
   let api
   let local
@@ -83,6 +108,15 @@ describe('S7-T20 edición de cita desde pacientes (API demo)', () => {
     expect((await api.guardarCita(preparado.cita)).ok).toBe(true)
     const visitas = await api.consultarVisitasAdmin(EMPLEADO_PRESENTE)
     expect(visitas.datos.find((item) => item.citaId === CITA_PRESENTE_ID).estadoAsistencia).toBe('programada')
+  })
+
+  it('agenda una cita nueva a un paciente cuya única cita está cerrada', async () => {
+    const preparado = prepararEdicionCita({ ...formularioNuevaCita(), empleadoId: EMPLEADO_CERRADO, fechaHoraLocal: '2026-12-03T11:00', motivo: 'Periódico' })
+    expect((await api.guardarCita(preparado.cita)).ok).toBe(true)
+    const visitas = await api.consultarVisitasAdmin(EMPLEADO_CERRADO)
+    const abierta = citaAbierta(visitas.datos, new Date('2026-11-25T18:00:00Z'))
+    expect(aMexicoInput(abierta.fechaHora)).toBe('2026-12-03T11:00')
+    expect(abierta.estadoAsistencia).toBe('programada')
   })
 
   it('no reprograma una cita cerrada', async () => {

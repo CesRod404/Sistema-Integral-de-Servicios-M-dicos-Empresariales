@@ -48,15 +48,28 @@ export function formularioEdicionCita(visita, aInput) {
   }
 }
 
-// Devuelve el payload de api.guardarCita (con id, reprograma la cita existente).
-export function prepararEdicionCita({ citaId, empleadoId, fechaHoraLocal, motivo } = {}) {
-  if (!citaId) return { ok: false, mensaje: 'Seleccione la cita que quiere editar.', cita: null }
+// La cita abierta que se muestra arriba de la ficha: la próxima por venir o,
+// si todas ya pasaron, la más reciente.
+export function citaAbierta(visitas = [], ahora = new Date()) {
+  const abiertas = visitas
+    .filter((visita) => ESTADOS_CITA_EDITABLE.includes(visita?.estadoAsistencia))
+    .sort((a, b) => String(a.fechaHora).localeCompare(String(b.fechaHora)))
+  if (!abiertas.length) return null
+  return abiertas.find((visita) => new Date(visita.fechaHora) >= ahora) || abiertas[abiertas.length - 1]
+}
+
+export function formularioNuevaCita() {
+  return { citaId: null, nueva: true, fechaHoraLocal: '', motivo: '' }
+}
+
+// Devuelve el payload de api.guardarCita: con id reprograma la cita existente;
+// con nueva = true agenda una cita al paciente que no tiene una abierta.
+export function prepararEdicionCita({ citaId, nueva = false, empleadoId, fechaHoraLocal, motivo } = {}) {
+  if (!citaId && !nueva) return { ok: false, mensaje: 'Seleccione la cita que quiere editar.', cita: null }
   if (!empleadoId) return { ok: false, mensaje: 'Seleccione un empleado ya registrado.', cita: null }
   const fecha = String(fechaHoraLocal || '').trim()
   if (!fecha) return { ok: false, mensaje: 'Indique la fecha y la hora de la cita.', cita: null }
   if (!PATRON_CITA_LOCAL.test(fecha)) return { ok: false, mensaje: 'Indique una fecha y hora de cita válidas.', cita: null }
-  return {
-    ok: true,
-    cita: { id: citaId, empleadoId, fechaHoraLocal: fecha.slice(0, 16), motivo: String(motivo || '').trim() }
-  }
+  const cita = { empleadoId, fechaHoraLocal: fecha.slice(0, 16), motivo: String(motivo || '').trim() }
+  return { ok: true, cita: citaId ? { id: citaId, ...cita } : cita }
 }
