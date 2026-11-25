@@ -9,7 +9,7 @@ Los ocho mockups se usaron solo como referencia visual (color, tipografía y com
 | Tema | Documentos | Decisión |
 | --- | --- | --- |
 | Tercer perfil de recepción | El SDD 5.3 describe un perfil de recepción. El SRS reconoce exactamente Administrador y Doctor (US-ACC-01, RF-03). | No se implementa un tercer rol. La sala de espera la opera el Administrador. |
-| Quién marca presente o ausente | Hasta el SRS v1.6, RF-13 y US-CLI-02 asignaban la asistencia solo al Administrador. El SRS v1.7 lo extiende al Doctor. Una secuencia del SDD la atribuye al consultorio. | Decisión actualizada el 24/11/2026 (S7-T12): el Administrador y el Doctor pueden marcar `presente` / `ausente`. El Doctor no programa, reprograma ni cancela citas. Hasta aplicar `202611240001_doctora_marca_asistencia.sql` en Supabase, la RPC de producción puede rechazar al doctor. |
+| Quién marca presente o ausente | Hasta el SRS v1.6, RF-13 y US-CLI-02 asignaban la asistencia solo al Administrador. El SRS v1.7 lo extiende al Doctor. Una secuencia del SDD la atribuye al consultorio. | Decisión actualizada el 24/11/2026 (S7-T12): el Administrador y el Doctor pueden marcar `presente` / `ausente`. El Doctor no programa, reprograma ni cancela citas. La migración `202611240001_doctora_marca_asistencia.sql` se aplicó en Supabase el 24/11/2026 (S7-T19, CR-44). |
 | Inicio de sesión | El mockup sugiere usuario. Supabase Auth identifica por correo. | El acceso es por correo y contraseña. |
 
 ## Clínica y confidencialidad
