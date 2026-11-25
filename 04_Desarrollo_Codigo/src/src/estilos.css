@@ -213,6 +213,12 @@ tr.valido { background: white; }
 .hora { font-weight: 800; color: var(--navy); }
 .icono-btn { border: 0; background: #f3f7fb; border-radius: 10px; width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer; color: var(--navy-2); }
 .acciones-tabla { display: flex; gap: 6px; }
+/* S7-T17 / S7-T18: selección múltiple con casillas. */
+.casilla-seleccion { width: 18px; height: 18px; cursor: pointer; accent-color: var(--navy-2); }
+th.col-casilla, td.col-casilla { width: 36px; text-align: center; }
+tr.seleccionada { background: #eef5ff; }
+.barra-seleccion { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; background: #eef5ff; color: var(--navy); font-weight: 700; }
+.barra-seleccion .acciones { margin-top: 0; }
 
 .resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .resumen article { padding: 16px; }

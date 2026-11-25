@@ -217,6 +217,42 @@ export function crearApiDemo() {
       return bien(empresa)
     },
 
+    async darDeBajaEmpresas(ids) {
+      // S7-T17: mismo contrato que supabaseApi.darDeBajaEmpresas.
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos una empresa.')
+      const estado = cargar()
+      let actualizados = 0
+      for (const empresa of estado.empresas) {
+        if (lista.includes(empresa.id) && empresa.estado === 'activo') {
+          empresa.estado = 'inactivo'
+          actualizados += 1
+        }
+      }
+      guardar(estado)
+      return bien({ actualizados, omitidos: lista.length - actualizados })
+    },
+
+    async darDeBajaPacientes(ids) {
+      // S7-T17: mismo contrato que supabaseApi.darDeBajaPacientes.
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos un paciente.')
+      const estado = cargar()
+      let actualizados = 0
+      for (const empleado of estado.empleados) {
+        if (lista.includes(empleado.id) && empleado.estado !== 'inactivo') {
+          empleado.estado = 'inactivo'
+          actualizados += 1
+        }
+      }
+      guardar(estado)
+      return bien({ actualizados, omitidos: lista.length - actualizados })
+    },
+
     async listarEmpleados() {
       const usuario = usuarioActual()
       const permiso = exigir(usuario, ['administrador', 'doctor'])

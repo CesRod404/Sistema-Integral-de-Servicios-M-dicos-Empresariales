@@ -222,6 +222,30 @@ export function crearApiSupabase() {
       return bien(mapEmpresa(data))
     },
 
+    async darDeBajaEmpresas(ids) {
+      // S7-T17: baja lógica de varias empresas (mismo efecto que cambiarEstadoEmpresa
+      // a «inactivo»; el borrado físico lo impide trg_empresas_no_delete).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos una empresa.')
+      const { data, error } = await supabase.from('empresas').update({ estado: 'inactivo' }).in('id', lista).eq('estado', 'activo').select('id')
+      if (error) return fallo(error)
+      return bien({ actualizados: (data || []).length, omitidos: lista.length - (data || []).length })
+    },
+
+    async darDeBajaPacientes(ids) {
+      // S7-T17: baja lógica de varios pacientes: quedan «inactivo». Citas,
+      // expedientes y cobros se conservan (trg_empleados_no_delete impide borrar).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos un paciente.')
+      const { data, error } = await supabase.from('empleados').update({ estado: 'inactivo' }).in('id', lista).neq('estado', 'inactivo').select('id')
+      if (error) return fallo(error)
+      return bien({ actualizados: (data || []).length, omitidos: lista.length - (data || []).length })
+    },
+
     async listarEmpleados() {
       const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)

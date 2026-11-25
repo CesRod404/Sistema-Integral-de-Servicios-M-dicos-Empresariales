@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
 import { formatearFecha } from '../domain/fecha.js'
 import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
-import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
+import { Aviso, Badge, Boton, Campo, CasillaTodos, Modal, Vacio } from '../componentes/Ui.jsx'
+import { alternarSeleccion, alternarTodos, estadoSeleccion, resumenNombres, seleccionVisible } from '../domain/seleccion.js'
 import { normalizarEdad } from '../domain/validadores.js'
 import { formularioPaciente, prepararCitaDeAlta } from '../domain/pacientes.js'
 import { marcadorPlantilla } from '../domain/plantillaEmpresa.js'
@@ -51,6 +52,9 @@ export function PacientesAdmin() {
   const [aviso, setAviso] = useState('')
   // S7-T16: el alta se abre debajo del encabezado, centrada, y no a un lado del título.
   const [altaAbierta, setAltaAbierta] = useState(false)
+  // S7-T17: selección múltiple para dar de baja varios pacientes (solo Administrador).
+  const [seleccion, setSeleccion] = useState(() => new Set())
+  const [confirmarBaja, setConfirmarBaja] = useState(false)
 
   async function cargar() {
     const [lista, catalogo] = await Promise.all([api.consultarPacientesAdmin(), api.listarEmpresas()])
@@ -68,6 +72,26 @@ export function PacientesAdmin() {
     if (estado && paciente.estadoCita !== estado && paciente.estado !== estado) return false
     return true
   }), [pacientes, texto, empresa, estado])
+
+  const puedeSeleccionar = !esDoctor
+  const idsVisibles = useMemo(() => visibles.map((paciente) => paciente.id), [visibles])
+  useEffect(() => { setSeleccion((actual) => seleccionVisible(actual, idsVisibles)) }, [idsVisibles])
+  const seleccionados = visibles.filter((paciente) => seleccion.has(paciente.id))
+  const aDarDeBaja = seleccionados.filter((paciente) => paciente.estado !== 'inactivo')
+
+  async function darDeBaja() {
+    const resultado = await api.darDeBajaPacientes(aDarDeBaja.map((paciente) => paciente.id))
+    setConfirmarBaja(false)
+    if (!resultado.ok) {
+      setAviso('')
+      setError(resultado.mensaje)
+      return
+    }
+    setError('')
+    setAviso(`${resultado.datos.actualizados} paciente(s) dados de baja (quedan inactivos). Sus citas, expedientes y cobros se conservan; se pueden reactivar desde su ficha.`)
+    setSeleccion(new Set())
+    await cargar()
+  }
 
   return (
     <section className="seccion">
@@ -113,21 +137,52 @@ export function PacientesAdmin() {
           <select value={estado} onChange={(e) => setEstado(e.target.value)}>
             <option value="">Todos</option>
             {['programada', 'presente', 'ausente', 'cerrada'].map((item) => <option key={item} value={item}>{etiquetaEstado(item)}</option>)}
+            <option value="inactivo">Paciente inactivo (baja)</option>
           </select>
         </Campo>
       </div>
       <div className="panel tabla-contenedor">
+        {puedeSeleccionar && seleccion.size ? (
+          <div className="barra-seleccion" role="status">
+            <span>{seleccion.size} paciente(s) seleccionado(s)</span>
+            <div className="acciones">
+              <Boton variante="peligro" disabled={!aDarDeBaja.length} onClick={() => setConfirmarBaja(true)}>Dar de baja seleccionados</Boton>
+              <Boton variante="linea" onClick={() => setSeleccion(new Set())}>Quitar selección</Boton>
+            </div>
+          </div>
+        ) : null}
         <table>
           <thead>
             <tr>
+              {puedeSeleccionar ? (
+                <th className="col-casilla">
+                  <CasillaTodos
+                    estado={estadoSeleccion(seleccion, idsVisibles)}
+                    etiqueta="Seleccionar todos los pacientes del filtro"
+                    disabled={!idsVisibles.length}
+                    onCambio={() => setSeleccion((actual) => alternarTodos(actual, idsVisibles))}
+                  />
+                </th>
+              ) : null}
               <th>ID</th><th>Nombre</th><th>Edad</th><th>Empresa</th><th>Plantilla</th><th>Fecha de registro</th><th>Estudios</th><th>Estado</th><th>Última atención</th><th></th>
             </tr>
           </thead>
           <tbody>
             {visibles.map((paciente) => (
-              <tr key={paciente.id}>
+              <tr key={paciente.id} className={seleccion.has(paciente.id) ? 'seleccionada' : undefined}>
+                {puedeSeleccionar ? (
+                  <td className="col-casilla">
+                    <input
+                      type="checkbox"
+                      className="casilla-seleccion"
+                      aria-label={`Seleccionar a ${paciente.nombre}`}
+                      checked={seleccion.has(paciente.id)}
+                      onChange={() => setSeleccion((actual) => alternarSeleccion(actual, paciente.id))}
+                    />
+                  </td>
+                ) : null}
                 <td>{paciente.folio}</td>
-                <td>{paciente.nombre}</td>
+                <td>{paciente.nombre}{paciente.estado === 'inactivo' ? <> <Badge tono="rojo">Inactivo</Badge></> : null}</td>
                 <td>{paciente.edad ?? '—'}</td>
                 <td>{paciente.empresaNombre}</td>
                 <td><MarcadorPlantilla paciente={paciente} /></td>
@@ -142,6 +197,15 @@ export function PacientesAdmin() {
         </table>
         {visibles.length === 0 ? <Vacio>No hay pacientes con ese filtro.</Vacio> : null}
       </div>
+      <Modal titulo="Dar de baja pacientes" abierto={confirmarBaja} onCerrar={() => setConfirmarBaja(false)}>
+        <p>Se dará de baja a {aDarDeBaja.length} paciente(s): {resumenNombres(aDarDeBaja)}.</p>
+        {seleccionados.length > aDarDeBaja.length ? <p className="nota">{seleccionados.length - aDarDeBaja.length} ya estaban inactivos y no cambian.</p> : null}
+        <p className="nota">Es una baja lógica: el paciente queda «Inactivo» y su historial (citas, expedientes y cobros) se conserva. Se puede reactivar desde su ficha, en «Estado del registro».</p>
+        <div className="acciones">
+          <Boton variante="peligro" onClick={darDeBaja}>Confirmar baja</Boton>
+          <Boton variante="linea" onClick={() => setConfirmarBaja(false)}>Volver</Boton>
+        </div>
+      </Modal>
     </section>
   )
 }

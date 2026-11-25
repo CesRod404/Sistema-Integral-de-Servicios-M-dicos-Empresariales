@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
 import { consolidarPorEmpresa, moneda } from '../domain/cobranza.js'
@@ -8,7 +8,8 @@ import { nombreArchivoPlantilla } from '../domain/plantillaEmpresa.js'
 import { EMPRESA_VACIA, FILTROS_ESTADO_EMPRESA, filtrarEmpresas, formularioDesdeEmpresa, resumenEmpresas } from '../domain/empresas.js'
 import { validarEmpresa } from '../domain/validadores.js'
 import { descargarXlsx } from '../componentes/descarga.js'
-import { Aviso, Badge, Boton, Campo, Modal, Vacio } from '../componentes/Ui.jsx'
+import { Aviso, Badge, Boton, Campo, CasillaTodos, Modal, Vacio } from '../componentes/Ui.jsx'
+import { alternarSeleccion, alternarTodos, estadoSeleccion, resumenNombres, seleccionVisible } from '../domain/seleccion.js'
 
 const VACIO = EMPRESA_VACIA
 
@@ -24,6 +25,9 @@ export function Empresas() {
   const [baja, setBaja] = useState(null)
   const [filtroEstado, setFiltroEstado] = useState('todas')
   const [consulta, setConsulta] = useState(null)
+  // S7-T17: selección múltiple de empresas activas para darlas de baja juntas.
+  const [seleccion, setSeleccion] = useState(() => new Set())
+  const [bajaVarias, setBajaVarias] = useState(false)
 
   async function cargar() {
     const lista = await api.listarEmpresas()
@@ -112,6 +116,23 @@ export function Empresas() {
 
   // US-EMP-03 / RF-06: consulta con filtro por estado y búsqueda por texto.
   const visibles = filtrarEmpresas(empresas, { texto, estado: filtroEstado })
+  const idsSeleccionables = useMemo(() => visibles.filter((empresa) => empresa.estado === 'activo').map((empresa) => empresa.id), [empresas, texto, filtroEstado])
+  useEffect(() => { setSeleccion((actual) => seleccionVisible(actual, idsSeleccionables)) }, [idsSeleccionables])
+  const seleccionadas = visibles.filter((empresa) => seleccion.has(empresa.id))
+
+  async function confirmarBajaVarias() {
+    const resultado = await api.darDeBajaEmpresas(seleccionadas.map((empresa) => empresa.id))
+    setBajaVarias(false)
+    if (!resultado.ok) {
+      setMensaje('')
+      setError(resultado.mensaje)
+      return
+    }
+    setError('')
+    setMensaje(`${resultado.datos.actualizados} empresa(s) quedaron inactivas. El historial de citas, expedientes y cobros se conserva.`)
+    setSeleccion(new Set())
+    await cargar()
+  }
   const resumen = resumenEmpresas(empresas)
   const cuentaConsulta = consulta ? cuentas.find((item) => item.empresaId === consulta.id) : null
   const enEdicion = form.id ? empresas.find((empresa) => empresa.id === form.id) : null
@@ -161,15 +182,44 @@ export function Empresas() {
         </div>
       </div>
       <div className="panel tabla-contenedor">
+        {seleccion.size ? (
+          <div className="barra-seleccion" role="status">
+            <span>{seleccion.size} empresa(s) seleccionada(s)</span>
+            <div className="acciones">
+              <Boton variante="peligro" onClick={() => setBajaVarias(true)}>Dar de baja seleccionadas</Boton>
+              <Boton variante="linea" onClick={() => setSeleccion(new Set())}>Quitar selección</Boton>
+            </div>
+          </div>
+        ) : null}
         <table>
           <thead>
-            <tr><th>ID</th><th>Empresa</th><th>Estado</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Total a cobrar</th><th>Estado de cuenta</th><th></th></tr>
+            <tr>
+              <th className="col-casilla">
+                <CasillaTodos
+                  estado={estadoSeleccion(seleccion, idsSeleccionables)}
+                  etiqueta="Seleccionar todas las empresas activas del filtro"
+                  disabled={!idsSeleccionables.length}
+                  onCambio={() => setSeleccion((actual) => alternarTodos(actual, idsSeleccionables))}
+                />
+              </th>
+              <th>ID</th><th>Empresa</th><th>Estado</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Total a cobrar</th><th>Estado de cuenta</th><th></th></tr>
           </thead>
           <tbody>
             {visibles.map((empresa) => {
               const cuenta = cuentas.find((item) => item.empresaId === empresa.id)
               return (
-                <tr key={empresa.id}>
+                <tr key={empresa.id} className={seleccion.has(empresa.id) ? 'seleccionada' : undefined}>
+                  <td className="col-casilla">
+                    <input
+                      type="checkbox"
+                      className="casilla-seleccion"
+                      aria-label={`Seleccionar ${empresa.nombre}`}
+                      title={empresa.estado === 'activo' ? undefined : 'La empresa ya está inactiva'}
+                      disabled={empresa.estado !== 'activo'}
+                      checked={seleccion.has(empresa.id)}
+                      onChange={() => setSeleccion((actual) => alternarSeleccion(actual, empresa.id))}
+                    />
+                  </td>
                   <td>{empresa.folio}</td>
                   <td>{empresa.nombre}</td>
                   <td><Badge tono={tonoEstado(empresa.estado)}>{etiquetaEstado(empresa.estado)}</Badge></td>
@@ -211,6 +261,14 @@ export function Empresas() {
         {consulta?.estado === 'inactivo' ? <p className="nota">Empresa dada de baja (baja lógica). Su historial de citas, expedientes y cobros se conserva.</p> : null}
         <div className="acciones">
           <Boton variante="linea" onClick={() => setConsulta(null)}>Cerrar</Boton>
+        </div>
+      </Modal>
+      <Modal titulo="Baja lógica de varias empresas" abierto={bajaVarias} onCerrar={() => setBajaVarias(false)}>
+        <p>Se dará de baja a {seleccionadas.length} empresa(s): {resumenNombres(seleccionadas)}. Las citas, expedientes y cobros permanecen.</p>
+        <p className="nota">Mientras estén inactivas no se agendan citas ni se importan empleados para ellas. Se pueden reactivar una por una después.</p>
+        <div className="acciones">
+          <Boton variante="peligro" onClick={confirmarBajaVarias}>Confirmar baja</Boton>
+          <Boton variante="linea" onClick={() => setBajaVarias(false)}>Volver</Boton>
         </div>
       </Modal>
       <Modal titulo="Baja lógica" abierto={Boolean(baja)} onCerrar={() => setBaja(null)}>
