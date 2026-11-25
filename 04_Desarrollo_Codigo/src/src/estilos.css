@@ -158,6 +158,11 @@ h1, h2, h3, p { margin: 0; }
 .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dos-columnas { grid-template-columns: 1.4fr 0.8fr; align-items: start; }
 .panel { padding: 16px 18px; }
+/* S7-T16: los formularios de alta y edición de los CRUD (pacientes, empresas,
+   catálogo de estudios) van centrados con un ancho máximo, para no dejar un
+   espacio vacío grande en medio de la pantalla. */
+.formulario-centrado { width: min(960px, 100%); margin-inline: auto; justify-self: center; }
+.formulario-centrado h3 { margin-bottom: 10px; }
 .panel + .panel, .tarjeta + .tarjeta { margin-top: 0; }
 .seccion { display: grid; gap: 16px; }
 

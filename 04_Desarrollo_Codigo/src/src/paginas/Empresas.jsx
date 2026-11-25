@@ -127,36 +127,37 @@ export function Empresas() {
       </div>
       <Aviso tipo="error">{error}</Aviso>
       <Aviso tipo="ok">{mensaje}</Aviso>
-      <div className="dos-columnas">
-        <form className="panel" onSubmit={guardar} noValidate>
-          <h3>{form.id ? 'Editar datos de contacto' : 'Nueva empresa'}</h3>
-          {enEdicion ? <p className="nota">{enEdicion.folio} · {enEdicion.nombre} ({etiquetaEstado(enEdicion.estado)})</p> : null}
-          <div className="form-grid">
-            <Campo etiqueta="Nombre" requerido error={erroresForm.nombre}><input value={form.nombre} onChange={(e) => cambiar('nombre', e.target.value)} required /></Campo>
-            <Campo etiqueta="Contacto" requerido error={erroresForm.contacto}><input value={form.contacto} onChange={(e) => cambiar('contacto', e.target.value)} required /></Campo>
-            <Campo etiqueta="Correo" requerido error={erroresForm.email}><input type="email" value={form.email} onChange={(e) => cambiar('email', e.target.value)} required /></Campo>
-            <Campo etiqueta="Teléfono" error={erroresForm.telefono}><input value={form.telefono} onChange={(e) => cambiar('telefono', e.target.value)} placeholder="10 dígitos" /></Campo>
-            <Campo etiqueta="Dirección"><input value={form.direccion} onChange={(e) => cambiar('direccion', e.target.value)} /></Campo>
-            <Campo etiqueta="Notas"><input value={form.notas} onChange={(e) => cambiar('notas', e.target.value)} /></Campo>
-          </div>
-          <div className="acciones">
-            <Boton variante="azul" tipo="submit">{form.id ? 'Guardar cambios' : 'Registrar empresa'}</Boton>
-            {form.id ? <Boton variante="linea" onClick={cancelarEdicion}>Cancelar edición</Boton> : null}
-          </div>
-        </form>
-        <div className="panel">
-          <h3>Consultar empresas</h3>
+      {/* S7-T16: formulario centrado; la búsqueda pasa a una barra de filtros. */}
+      <form className="panel formulario-centrado" onSubmit={guardar} noValidate>
+        <h3>{form.id ? 'Editar datos de contacto' : 'Nueva empresa'}</h3>
+        {enEdicion ? <p className="nota">{enEdicion.folio} · {enEdicion.nombre} ({etiquetaEstado(enEdicion.estado)})</p> : null}
+        <div className="form-grid">
+          <Campo etiqueta="Nombre" requerido error={erroresForm.nombre}><input value={form.nombre} onChange={(e) => cambiar('nombre', e.target.value)} required /></Campo>
+          <Campo etiqueta="Contacto" requerido error={erroresForm.contacto}><input value={form.contacto} onChange={(e) => cambiar('contacto', e.target.value)} required /></Campo>
+          <Campo etiqueta="Correo" requerido error={erroresForm.email}><input type="email" value={form.email} onChange={(e) => cambiar('email', e.target.value)} required /></Campo>
+          <Campo etiqueta="Teléfono" error={erroresForm.telefono}><input value={form.telefono} onChange={(e) => cambiar('telefono', e.target.value)} placeholder="10 dígitos" /></Campo>
+          <Campo etiqueta="Dirección"><input value={form.direccion} onChange={(e) => cambiar('direccion', e.target.value)} /></Campo>
+          <Campo etiqueta="Notas"><input value={form.notas} onChange={(e) => cambiar('notas', e.target.value)} /></Campo>
+        </div>
+        <div className="acciones">
+          <Boton variante="azul" tipo="submit">{form.id ? 'Guardar cambios' : 'Registrar empresa'}</Boton>
+          {form.id ? <Boton variante="linea" onClick={cancelarEdicion}>Cancelar edición</Boton> : null}
+        </div>
+      </form>
+      <div className="panel">
+        <h3>Consultar empresas</h3>
+        <div className="filtros">
           <Campo etiqueta="Buscar"><input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Folio, nombre, contacto, correo o teléfono" /></Campo>
           <Campo etiqueta="Estado">
             <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
               {FILTROS_ESTADO_EMPRESA.map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}
             </select>
           </Campo>
-          <div className="resumen-previa">
-            <span>{resumen.total} registradas</span>
-            <span>{resumen.activas} activas</span>
-            <span>{resumen.inactivas} inactivas</span>
-          </div>
+        </div>
+        <div className="resumen-previa">
+          <span>{resumen.total} registradas</span>
+          <span>{resumen.activas} activas</span>
+          <span>{resumen.inactivas} inactivas</span>
         </div>
       </div>
       <div className="panel tabla-contenedor">

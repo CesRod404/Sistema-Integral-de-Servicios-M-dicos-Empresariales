@@ -49,6 +49,8 @@ export function PacientesAdmin() {
   const [estado, setEstado] = useState('')
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  // S7-T16: el alta se abre debajo del encabezado, centrada, y no a un lado del título.
+  const [altaAbierta, setAltaAbierta] = useState(false)
 
   async function cargar() {
     const [lista, catalogo] = await Promise.all([api.consultarPacientesAdmin(), api.listarEmpresas()])
@@ -76,7 +78,13 @@ export function PacientesAdmin() {
             ? 'Alta, edición y consulta de pacientes. Al elegir la empresa aparecen los campos de su plantilla. Al registrar un paciente se abre su atención para adjuntar el examen en PDF.'
             : 'Alta manual o consulta. Al elegir la empresa aparecen los campos de su plantilla Excel. Si indica fecha y hora, la cita queda en la agenda y la doctora la ve en la Cola del día de esa fecha. El expediente clínico se consulta en solo lectura, sin diagnóstico ni PDF.'}</p>
         </div>
+        {!altaAbierta ? <Boton variante="azul" onClick={() => setAltaAbierta(true)}>Nuevo paciente</Boton> : null}
+      </div>
+      <Aviso tipo="error">{error}</Aviso>
+      <Aviso tipo="ok">{aviso}</Aviso>
+      {altaAbierta ? (
         <Alta
+          onCerrar={() => setAltaAbierta(false)}
           api={api}
           empresas={empresas}
           puedeAgendarCita={!esDoctor}
@@ -92,9 +100,7 @@ export function PacientesAdmin() {
           onAviso={setAviso}
           onError={setError}
         />
-      </div>
-      <Aviso tipo="error">{error}</Aviso>
-      <Aviso tipo="ok">{aviso}</Aviso>
+      ) : null}
       <div className="filtros">
         <Campo etiqueta="Buscar"><input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Nombre, empresa o CURP" /></Campo>
         <Campo etiqueta="Empresa">
@@ -150,8 +156,7 @@ function columnasDeAlta(plantilla) {
   return (plantilla?.columnas || []).filter((columna) => columna.clave !== 'nombre_completo')
 }
 
-function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError }) {
-  const [abierto, setAbierto] = useState(false)
+function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError, onCerrar }) {
   const [form, setForm] = useState(VACIO_ALTA)
   const [plantilla, setPlantilla] = useState(null)
   const [valoresPlantilla, setValoresPlantilla] = useState({})
@@ -184,7 +189,6 @@ function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError })
     if (clave === 'edad') setForm((actual) => ({ ...actual, edad: valor }))
   }
 
-  if (!abierto) return <Boton variante="azul" onClick={() => setAbierto(true)}>Nuevo paciente</Boton>
   const columnas = columnasDeAlta(plantilla)
   const etiquetaPlantilla = !form.empresaId
     ? null
@@ -193,7 +197,7 @@ function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError })
       : `Campos de la plantilla vigente · versión ${plantilla.version}.`)
 
   return (
-    <form className="panel" onSubmit={async (evento) => {
+    <form className="panel formulario-centrado" onSubmit={async (evento) => {
       evento.preventDefault()
       const vigente = plantilla || plantillaPredeterminada(form.empresaId)
       const valores = { ...valoresPlantilla, nombre_completo: form.nombre }
@@ -225,7 +229,7 @@ function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError })
           setForm(VACIO_ALTA)
           setPlantilla(null)
           setValoresPlantilla({})
-          setAbierto(false)
+          onCerrar()
           onGuardado(resultado.datos)
           return
         }
@@ -238,7 +242,7 @@ function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError })
       setForm(VACIO_ALTA)
       setPlantilla(null)
       setValoresPlantilla({})
-      setAbierto(false)
+      onCerrar()
       onGuardado(resultado.datos)
     }}>
       <h3>Alta manual</h3>
@@ -280,7 +284,7 @@ function Alta({ api, empresas, puedeAgendarCita, onGuardado, onAviso, onError })
       {puedeAgendarCita ? <p className="nota">La fecha y la hora son opcionales. Si las indica, la cita queda programada y aparece en la Cola del día de la doctora. El paciente también se puede registrar sin cita.</p> : null}
       <div className="acciones">
         <Boton variante="azul" tipo="submit">Guardar</Boton>
-        <Boton variante="linea" onClick={() => setAbierto(false)}>Cancelar</Boton>
+        <Boton variante="linea" onClick={() => onCerrar()}>Cancelar</Boton>
       </div>
     </form>
   )
@@ -412,7 +416,7 @@ export function FichaPaciente() {
       {esDoctor ? null : <Aviso tipo="info">Consulta de auditoría en solo lectura. El diagnóstico, las observaciones clínicas y los PDF no están disponibles para el administrador.</Aviso>}
       <Aviso tipo="error">{error}</Aviso>
       <Aviso tipo="ok">{mensaje}</Aviso>
-      <form className="panel" onSubmit={guardar}>
+      <form className="panel formulario-centrado" onSubmit={guardar}>
         <h3>Datos del paciente</h3>
         <div className="form-grid">
           <Campo etiqueta="Nombre completo" requerido><input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></Campo>

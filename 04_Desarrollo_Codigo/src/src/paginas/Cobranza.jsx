@@ -152,11 +152,13 @@ export function Cobranza() {
         </div>
       ) : null}
       {pestaña === 'catalogo' ? (
-        <div className="dos-columnas">
-          <form className="panel" onSubmit={guardarEstudio}>
+        <div className="seccion">
+          <form className="panel formulario-centrado" onSubmit={guardarEstudio}>
             <h3>{estudio.id ? 'Editar estudio' : 'Nuevo estudio'}</h3>
-            <Campo etiqueta="Nombre" requerido><input value={estudio.nombre} onChange={(e) => setEstudio({ ...estudio, nombre: e.target.value })} required /></Campo>
-            <Campo etiqueta="Precio unitario" requerido><input type="number" min="0" step="0.01" value={estudio.precio} onChange={(e) => setEstudio({ ...estudio, precio: e.target.value })} required /></Campo>
+            <div className="form-grid">
+              <Campo etiqueta="Nombre" requerido><input value={estudio.nombre} onChange={(e) => setEstudio({ ...estudio, nombre: e.target.value })} required /></Campo>
+              <Campo etiqueta="Precio unitario" requerido><input type="number" min="0" step="0.01" value={estudio.precio} onChange={(e) => setEstudio({ ...estudio, precio: e.target.value })} required /></Campo>
+            </div>
             <label><input type="checkbox" checked={estudio.vigente !== false} onChange={(e) => setEstudio({ ...estudio, vigente: e.target.checked })} /> Vigente</label>
             <div className="acciones">
               <Boton variante="azul" tipo="submit">Guardar tarifa</Boton>
