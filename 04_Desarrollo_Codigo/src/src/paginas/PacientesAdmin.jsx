@@ -6,12 +6,13 @@ import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, Vacio } from '../componentes/Ui.jsx'
 import { normalizarEdad } from '../domain/validadores.js'
 import { formularioPaciente, prepararCitaDeAlta } from '../domain/pacientes.js'
-import { inputDeCampo, payloadAltaPaciente, plantillaPredeterminada, resolverPlantilla, valoresDesdePaciente } from '../domain/plantillaCampos.js'
+import { cambiarEmpresaPaciente, inputDeCampo, payloadAltaPaciente, payloadEdicionPaciente, plantillaPredeterminada, resolverPlantilla, valoresDesdePaciente } from '../domain/plantillaCampos.js'
 
 // S5-T14: el formulario captura nombre, empresa y estado (SDD §4.1).
 // S7-T08: también captura la edad (opcional, entero de 0 a 120).
 // S7-T09: el administrador puede asignar, de forma opcional, fecha y hora de cita.
 // S7-T11: al elegir empresa se muestran los campos de su plantilla vigente.
+// S7-T14: al editar, si cambia la empresa, los campos cambian a la plantilla de la empresa nueva.
 const VACIO = { nombre: '', empresaId: '', estado: 'provisional', edad: '' }
 const VACIO_ALTA = { ...VACIO, fechaHoraLocal: '', motivo: '' }
 
@@ -286,8 +287,33 @@ export function FichaPaciente() {
   const [visitas, setVisitas] = useState([])
   const [empresas, setEmpresas] = useState([])
   const [form, setForm] = useState(VACIO)
+  const [plantilla, setPlantilla] = useState(null)
+  const [valoresPlantilla, setValoresPlantilla] = useState({})
+  const [descartados, setDescartados] = useState([])
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+
+  async function plantillaDe(empresaId) {
+    const resultado = await api.obtenerPlantillaEmpresa(empresaId)
+    if (!resultado.ok) {
+      setError(resultado.mensaje)
+      return plantillaPredeterminada(empresaId)
+    }
+    return resolverPlantilla(resultado.datos, empresaId)
+  }
+
+  // S7-T14: se cargan los datos completos del paciente (con datos_extra) y la
+  // plantilla vigente de su empresa para mostrar sus campos en la edición.
+  async function cargarPaciente(base) {
+    const completo = await api.obtenerEmpleado(empleadoId)
+    const actual = completo.ok ? { ...base, ...completo.datos, empresaNombre: base.empresaNombre } : base
+    setPaciente(actual)
+    setForm(formularioPaciente(actual))
+    const vigente = await plantillaDe(actual.empresaId)
+    setPlantilla(vigente)
+    setValoresPlantilla(valoresDesdePaciente(vigente, actual))
+    setDescartados([])
+  }
 
   useEffect(() => {
     let vivo = true
@@ -296,25 +322,56 @@ export function FichaPaciente() {
       if (!lista.ok) setError(lista.mensaje)
       const actual = lista.ok ? lista.datos.find((item) => item.id === empleadoId) : null
       setPaciente(actual || null)
-      if (actual) {
-        setForm(formularioPaciente(actual))
-      }
+      if (actual) cargarPaciente(actual)
       if (visitasRes.ok) setVisitas(visitasRes.datos)
       if (empresasRes.ok) setEmpresas(empresasRes.datos)
     })
     return () => { vivo = false }
   }, [api, empleadoId])
 
+  async function cambiarEmpresa(empresaId) {
+    setForm((actual) => ({ ...actual, empresaId }))
+    if (!empresaId) return
+    const nueva = await plantillaDe(empresaId)
+    const cambio = cambiarEmpresaPaciente({ valoresActuales: valoresPlantilla, plantillaAnterior: plantilla, plantillaNueva: nueva, paciente })
+    setPlantilla(nueva)
+    setValoresPlantilla(cambio.valores)
+    setDescartados(empresaId === paciente?.empresaId ? [] : cambio.descartados)
+  }
+
+  function cambiarCampo(clave, valor) {
+    setValoresPlantilla((actual) => ({ ...actual, [clave]: valor }))
+    if (clave === 'edad') setForm((actual) => ({ ...actual, edad: valor }))
+  }
+
   async function guardar(evento) {
     evento.preventDefault()
-    const resultado = await api.guardarEmpleado(form)
+    const preparado = payloadEdicionPaciente({
+      paciente,
+      nombre: form.nombre,
+      empresaId: form.empresaId,
+      estado: form.estado,
+      edad: form.edad,
+      plantilla,
+      valores: valoresPlantilla
+    })
+    if (!preparado.ok) {
+      setMensaje('')
+      setError(preparado.mensaje)
+      return
+    }
+    const resultado = await api.guardarEmpleado(preparado.payload)
     if (!resultado.ok) {
       setMensaje('')
       setError(resultado.mensaje)
     } else {
       setError('')
-      setPaciente((anterior) => ({ ...anterior, ...resultado.datos }))
-      setForm(formularioPaciente(resultado.datos))
+      const empresaNombre = empresas.find((item) => item.id === resultado.datos.empresaId)?.nombre || resultado.datos.empresaNombre
+      const actualizado = { ...paciente, ...resultado.datos, empresaNombre }
+      setPaciente(actualizado)
+      setForm(formularioPaciente(actualizado))
+      setValoresPlantilla(valoresDesdePaciente(plantilla, actualizado))
+      setDescartados([])
       setMensaje('Los datos del paciente se actualizaron. El expediente clínico no se modifica desde aquí.')
     }
   }
@@ -325,6 +382,8 @@ export function FichaPaciente() {
     if (!resultado.ok) setError(resultado.mensaje)
     else navigate(`/app/atencion/${resultado.datos.citaId}`)
   }
+
+  const columnasEdicion = columnasDeAlta(plantilla)
 
   if (!paciente && !error) return <p className="nota">Cargando paciente…</p>
   if (!paciente) return <Aviso tipo="error">{error || 'El paciente no existe.'}</Aviso>
@@ -349,14 +408,37 @@ export function FichaPaciente() {
         <div className="form-grid">
           <Campo etiqueta="Nombre completo" requerido><input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></Campo>
           <Campo etiqueta="Empresa" requerido>
-            <select value={form.empresaId} onChange={(e) => setForm({ ...form, empresaId: e.target.value })}>
+            <select value={form.empresaId} onChange={(e) => cambiarEmpresa(e.target.value)}>
               {empresas.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
             </select>
           </Campo>
-          <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} />
+          {!columnasEdicion.some((columna) => columna.clave === 'edad')
+            ? <CampoEdad valor={form.edad} onCambio={(valor) => setForm({ ...form, edad: valor })} />
+            : null}
           <CampoEstado valor={form.estado} onCambio={(valor) => setForm({ ...form, estado: valor })} />
+          {columnasEdicion.map((columna) => {
+            const input = inputDeCampo(columna)
+            return (
+              <Campo key={columna.clave} etiqueta={columna.etiqueta} requerido={columna.obligatorio}>
+                <input
+                  type={input.type}
+                  step={input.step}
+                  value={valoresPlantilla[columna.clave] ?? ''}
+                  onChange={(e) => cambiarCampo(columna.clave, e.target.value)}
+                />
+              </Campo>
+            )
+          })}
         </div>
-        <Boton variante="azul" tipo="submit">Guardar datos</Boton>
+        <p className="nota">{plantilla?.predeterminada || !plantilla?.version
+          ? 'Campos de la plantilla predeterminada de la empresa.'
+          : `Campos de la plantilla vigente de la empresa · versión ${plantilla.version}.`}</p>
+        {descartados.length
+          ? <Aviso tipo="pendiente">{`La empresa nueva no usa estos campos de la plantilla anterior y se quitarán al guardar: ${descartados.join(', ')}.`}</Aviso>
+          : null}
+        <div className="acciones">
+          <Boton variante="azul" tipo="submit">Guardar datos</Boton>
+        </div>
       </form>
       <div className="panel tabla-contenedor">
         <h3>Visitas</h3>

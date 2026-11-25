@@ -225,6 +225,16 @@ export function crearApiDemo() {
       return bien(estado.empleados.map((empleado) => enriquecerEmpleado(estado, empleado)))
     },
 
+    async obtenerEmpleado(id) {
+      // S7-T14: mismo contrato que supabaseApi.obtenerEmpleado.
+      const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const empleado = estado.empleados.find((item) => item.id === id)
+      if (!empleado) return mal('El paciente no existe.')
+      return bien(enriquecerEmpleado(estado, empleado))
+    },
+
     async guardarEmpleado(datos) {
       // S5-T14: mismo permiso que supabaseApi (Administrador y Doctor).
       const permiso = exigir(usuarioActual(), ['administrador', 'doctor'])

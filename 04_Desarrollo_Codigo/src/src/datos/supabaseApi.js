@@ -227,6 +227,22 @@ export function crearApiSupabase() {
       return bien((data || []).map(mapEmpleado))
     },
 
+    async obtenerEmpleado(id) {
+      // S7-T14: datos completos del paciente (incluye datos_extra) para editarlo
+      // con los campos de la plantilla de su empresa.
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
+      if (permiso) return mal(permiso)
+      let { data, error } = await supabase.from('empleados').select(SELECT_EMPLEADO).eq('id', id).maybeSingle()
+      if (error && esErrorDatosExtra(error)) {
+        const reintento = await supabase.from('empleados').select(SELECT_EMPLEADO_SIN_EXTRA).eq('id', id).maybeSingle()
+        data = reintento.data
+        error = reintento.error
+      }
+      if (error) return fallo(error)
+      if (!data) return mal('El paciente no existe.')
+      return bien(mapEmpleado(data))
+    },
+
     async guardarEmpleado(datos) {
       // S5-T14: el doctor también da de alta y edita pacientes (Project Plan §1:
       // "El Doctor gestionará ... datos del paciente"). Requiere la migración
