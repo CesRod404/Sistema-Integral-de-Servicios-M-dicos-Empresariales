@@ -111,3 +111,44 @@ export function reportePeriodo({ empresas, cargos, pagos, desde, hasta }) {
 export function moneda(valor) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(valor) || 0)
 }
+
+// S7-T18: marcar varios cargos como pagados. Cada cargo seleccionado con saldo
+// recibe un pago por su saldo completo, con la misma referencia y fecha. Los
+// cargos ya pagados se omiten. Mismas reglas que registrar_pagos_lote en Supabase.
+export function prepararPagoLote({ cargos = [], pagos = [], ids = [], referencia, fecha } = {}) {
+  if (!String(referencia || '').trim()) return { ok: false, mensaje: 'Capture la referencia del depósito o transferencia.' }
+  if (!fecha) return { ok: false, mensaje: 'Indique la fecha del pago.' }
+  const elegidos = new Set(ids)
+  const seleccion = cargos.filter((cargo) => elegidos.has(cargo.id))
+  if (!seleccion.length) return { ok: false, mensaje: 'Seleccione al menos un cargo.' }
+  const aPagar = []
+  let omitidos = 0
+  for (const cargo of seleccion) {
+    const { saldo } = saldoCargo(cargo, pagos)
+    if (saldo <= 0.001) {
+      omitidos += 1
+      continue
+    }
+    aPagar.push({ cargoId: cargo.id, monto: saldo })
+  }
+  if (!aPagar.length) return { ok: false, mensaje: 'Los cargos seleccionados ya están pagados.' }
+  return {
+    ok: true,
+    pagos: aPagar,
+    omitidos,
+    total: redondear(aPagar.reduce((suma, pago) => suma + pago.monto, 0)),
+    referencia: String(referencia).trim(),
+    fecha
+  }
+}
+
+export function filtrarCargos(cargos, pagos, { empresa = '', texto = '', estatus = '' } = {}) {
+  const busqueda = String(texto || '').toLowerCase()
+  return cargos.filter((cargo) => {
+    if (empresa && cargo.empresaId !== empresa) return false
+    if (estatus === 'con_saldo' && saldoCargo(cargo, pagos).saldo <= 0.001) return false
+    if (estatus && estatus !== 'con_saldo' && cargo.estatus !== estatus) return false
+    const blob = `${cargo.pacienteNombre} ${cargo.concepto} ${cargo.empresaNombre}`.toLowerCase()
+    return !busqueda || blob.includes(busqueda)
+  })
+}

@@ -580,6 +580,24 @@ export function crearApiSupabase() {
       return bien(true)
     },
 
+    async registrarPagosLote({ cargoIds, referencia, fecha }) {
+      // S7-T18: varios cargos pagados por su saldo completo en una transacción
+      // (RPC registrar_pagos_lote, migración 202611250003_pagos_en_lote.sql).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const ids = [...new Set(cargoIds || [])].filter(Boolean)
+      if (!ids.length) return mal('Seleccione al menos un cargo.')
+      if (!String(referencia || '').trim()) return mal('Capture la referencia del depósito o transferencia.')
+      if (!fecha) return mal('Indique la fecha del pago.')
+      const { data, error } = await supabase.rpc('registrar_pagos_lote', {
+        p_cargo_ids: ids,
+        p_referencia: String(referencia).trim(),
+        p_fecha: fecha
+      })
+      if (error) return fallo(error)
+      return bien({ pagados: Number(data?.pagados) || 0, omitidos: Number(data?.omitidos) || 0, total: Number(data?.total) || 0 })
+    },
+
     async reportePeriodo(desde, hasta) {
       const lista = await this.listarCargos()
       if (!lista.ok) return lista

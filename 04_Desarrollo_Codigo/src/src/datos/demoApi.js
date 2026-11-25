@@ -2,7 +2,7 @@ import { reiniciarIntentos, registrarFallo, estaBloqueado, solicitarCodigo, veri
 import { validarContrasena } from '../domain/validadores.js'
 import { buscarDuplicado } from '../domain/excelImport.js'
 import { cambiarAsistencia, cancelarCita, validarCierre } from '../domain/clinica.js'
-import { aplicarPago, generarCargos, reportePeriodo } from '../domain/cobranza.js'
+import { aplicarPago, generarCargos, prepararPagoLote, reportePeriodo } from '../domain/cobranza.js'
 import { vistaEstudio, vistaExpediente } from '../domain/roles.js'
 import { validarCita, validarEmpleado, validarEmpresa, validarEstudio, validarPdf, normalizarCorreo, normalizarTelefono, validarCurp, normalizarEdad } from '../domain/validadores.js'
 import { desdeMexicoInput, hoyMexico } from '../domain/fecha.js'
@@ -608,6 +608,34 @@ export function crearApiDemo() {
       cargo.estatus = resultado.estatus
       guardar(estado)
       return bien(vistaCargo(estado, cargo))
+    },
+
+    async registrarPagosLote({ cargoIds, referencia, fecha }) {
+      // S7-T18: mismo contrato que supabaseApi.registrarPagosLote (todo o nada).
+      const permiso = exigir(usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const estado = cargar()
+      const ids = [...new Set(cargoIds || [])].filter(Boolean)
+      if (ids.some((id) => !estado.cargos.some((cargo) => cargo.id === id))) return mal('Uno de los cargos seleccionados no existe.')
+      const preparado = prepararPagoLote({ cargos: estado.cargos, pagos: estado.pagos, ids, referencia, fecha })
+      if (!preparado.ok) {
+        if (preparado.mensaje === 'Los cargos seleccionados ya están pagados.') return bien({ pagados: 0, omitidos: ids.length, total: 0 })
+        return mal(preparado.mensaje)
+      }
+      for (const pago of preparado.pagos) {
+        const cargo = estado.cargos.find((item) => item.id === pago.cargoId)
+        estado.pagos.push({
+          id: crypto.randomUUID(),
+          cargoId: cargo.id,
+          empresaId: cargo.empresaId,
+          monto: pago.monto,
+          referencia: preparado.referencia,
+          fecha: preparado.fecha
+        })
+        cargo.estatus = 'pagado'
+      }
+      guardar(estado)
+      return bien({ pagados: preparado.pagos.length, omitidos: preparado.omitidos, total: preparado.total })
     },
 
     async reportePeriodo(desde, hasta) {
