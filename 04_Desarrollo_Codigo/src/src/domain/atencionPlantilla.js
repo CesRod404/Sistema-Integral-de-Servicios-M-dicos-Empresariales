@@ -1,7 +1,7 @@
 // S7-T10: los campos de la plantilla vigente de la empresa se muestran y
 // editan en la atención del doctor. Reutiliza las reglas de tipo y
 // obligatoriedad de la importación (RF-21) sobre los datos del empleado.
-import { infoCampoBase, ordenarColumnas, plantillaPredeterminada } from './plantillaEmpresa.js'
+import { convertirCurpReutilizada, infoCampoBase, ordenarColumnas, plantillaPredeterminada } from './plantillaEmpresa.js'
 import { validarValorTipo } from './importacionPlantilla.js'
 import { validarCurp, validarCorreo, normalizarCorreo, normalizarTelefono, normalizarEdad } from './validadores.js'
 
@@ -9,9 +9,11 @@ function vacio(valor) {
   return valor == null || String(valor).trim() === ''
 }
 
+// S7-T13: una columna «curp» renombrada a otro dato (p. ej. «Mina a la que va»)
+// se trata como columna personalizada de texto y no se valida como CURP.
 export function resolverPlantilla(plantilla, empresaId) {
   if (plantilla && Array.isArray(plantilla.columnas) && plantilla.columnas.length) {
-    return { ...plantilla, columnas: ordenarColumnas(plantilla.columnas) }
+    return { ...plantilla, columnas: ordenarColumnas(convertirCurpReutilizada(plantilla.columnas).columnas) }
   }
   return plantillaPredeterminada(empresaId)
 }

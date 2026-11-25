@@ -125,6 +125,7 @@ export function PlantillaEmpresa() {
       <Aviso tipo="error">{error}</Aviso>
       <Aviso tipo="ok">{mensaje}</Aviso>
       {!validacion.ok ? validacion.errores.map((texto) => <Aviso key={texto} tipo="pendiente">{texto}</Aviso>) : null}
+      {(validacion.avisos || []).map((texto) => <Aviso key={texto} tipo="info">{texto}</Aviso>)}
       <div className="panel tabla-contenedor">
         <h3>Columnas</h3>
         <table>
@@ -166,7 +167,7 @@ export function PlantillaEmpresa() {
                 </td>
                 <td>{columna.personalizado ? <Badge tono="ambar">Personalizada</Badge> : <Badge tono="neutro">Campo del empleado</Badge>}</td>
                 <td>
-                  {puedeQuitarse(columna)
+                  {puedeQuitarse(columna, columnas)
                     ? <Boton variante="peligro" onClick={() => setColumnas((actual) => quitarCampo(actual, columna.clave))}>Quitar</Boton>
                     : <small className="nota">Fija</small>}
                 </td>
@@ -206,7 +207,7 @@ export function PlantillaEmpresa() {
               <Boton variante="texto" onClick={() => setColumnas((actual) => agregarCampoBase(actual, campo.clave))}>Agregar</Boton>
             </p>
           )) : <Vacio>Todos los campos del empleado están en la plantilla.</Vacio>}
-          <p className="nota">«Nombre completo» siempre es obligatorio. «CURP» y «Clave de empleado» no se pueden quitar porque se usan para detectar duplicados.</p>
+          <p className="nota">«Nombre completo» siempre es obligatorio. Debe quedar al menos «CURP» o «Clave de empleado» porque se usan para detectar duplicados. La columna «CURP» solo guarda la CURP: si le pone el nombre de otro dato (por ejemplo «Mina a la que va»), al guardar se convierte en una columna personalizada de texto.</p>
         </div>
       </div>
     </section>
