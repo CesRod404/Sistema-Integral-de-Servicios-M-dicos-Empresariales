@@ -6,7 +6,7 @@ import { etiquetaEstado, tonoEstado } from '../componentes/etiquetas.js'
 import { Aviso, Badge, Boton, Campo, CasillaTodos, Modal, Vacio } from '../componentes/Ui.jsx'
 import { alternarSeleccion, alternarTodos, estadoSeleccion, resumenNombres, seleccionVisible } from '../domain/seleccion.js'
 import { normalizarEdad } from '../domain/validadores.js'
-import { citaAbierta, citaEditable, formularioEdicionCita, formularioNuevaCita, formularioPaciente, prepararCitaDeAlta, prepararEdicionCita } from '../domain/pacientes.js'
+import { citaAbierta, citaEditable, filtrarPacientes, formularioEdicionCita, formularioNuevaCita, formularioPaciente, prepararCitaDeAlta, prepararEdicionCita } from '../domain/pacientes.js'
 import { marcadorPlantilla } from '../domain/plantillaEmpresa.js'
 import { cambiarEmpresaPaciente, inputDeCampo, payloadAltaPaciente, payloadEdicionPaciente, plantillaPredeterminada, resolverPlantilla, valoresDesdePaciente } from '../domain/plantillaCampos.js'
 
@@ -68,13 +68,9 @@ export function PacientesAdmin() {
 
   useEffect(() => { cargar() }, [api])
 
-  const visibles = useMemo(() => pacientes.filter((paciente) => {
-    const blob = `${paciente.nombre} ${paciente.empresaNombre} ${paciente.curp || ''} ${paciente.folio || ''}`.toLowerCase()
-    if (texto && !blob.includes(texto.toLowerCase())) return false
-    if (empresa && paciente.empresaId !== empresa) return false
-    if (estado && paciente.estadoCita !== estado && paciente.estado !== estado) return false
-    return true
-  }), [pacientes, texto, empresa, estado])
+  // S7-T21: los inactivos solo se ven con el filtro «Paciente inactivo (baja)».
+  // «Seleccionar todos» y la baja múltiple actúan solo sobre estas filas visibles.
+  const visibles = useMemo(() => filtrarPacientes(pacientes, { texto, empresa, estado }), [pacientes, texto, empresa, estado])
 
   const puedeSeleccionar = !esDoctor
   const idsVisibles = useMemo(() => visibles.map((paciente) => paciente.id), [visibles])
@@ -138,7 +134,7 @@ export function PacientesAdmin() {
         </Campo>
         <Campo etiqueta="Estado de cita">
           <select value={estado} onChange={(e) => setEstado(e.target.value)}>
-            <option value="">Todos</option>
+            <option value="">Todos (activos)</option>
             {['programada', 'presente', 'ausente', 'cerrada'].map((item) => <option key={item} value={item}>{etiquetaEstado(item)}</option>)}
             <option value="inactivo">Paciente inactivo (baja)</option>
           </select>
@@ -203,7 +199,7 @@ export function PacientesAdmin() {
             ))}
           </tbody>
         </table>
-        {visibles.length === 0 ? <Vacio>No hay pacientes con ese filtro.</Vacio> : null}
+        {visibles.length === 0 ? <Vacio>{estado === 'inactivo' ? 'No hay pacientes inactivos con ese filtro.' : 'No hay pacientes activos con ese filtro. Los dados de baja se consultan con «Paciente inactivo (baja)».'}</Vacio> : null}
       </div>
       <Modal titulo="Dar de baja pacientes" abierto={confirmarBaja} onCerrar={() => setConfirmarBaja(false)}>
         <p>Se dará de baja a {aDarDeBaja.length} paciente(s): {resumenNombres(aDarDeBaja)}.</p>

@@ -73,3 +73,26 @@ export function prepararEdicionCita({ citaId, nueva = false, empleadoId, fechaHo
   const cita = { empleadoId, fechaHoraLocal: fecha.slice(0, 16), motivo: String(motivo || '').trim() }
   return { ok: true, cita: citaId ? { id: citaId, ...cita } : cita }
 }
+
+// S7-T21: los pacientes dados de baja (inactivos) solo aparecen en la lista cuando
+// el filtro es «Paciente inactivo (baja)». Con «Todos» o un estado de cita, se ocultan.
+export const FILTRO_INACTIVOS = 'inactivo'
+
+export function filtrarPacientes(pacientes = [], { texto = '', empresa = '', estado = '' } = {}) {
+  const busqueda = String(texto || '').toLowerCase()
+  return pacientes.filter((paciente) => {
+    const inactivo = paciente.estado === 'inactivo'
+    if (estado === FILTRO_INACTIVOS) {
+      if (!inactivo) return false
+    } else {
+      if (inactivo) return false
+      if (estado && paciente.estadoCita !== estado) return false
+    }
+    if (empresa && paciente.empresaId !== empresa) return false
+    if (busqueda) {
+      const blob = `${paciente.nombre} ${paciente.empresaNombre} ${paciente.curp || ''} ${paciente.folio || ''}`.toLowerCase()
+      if (!blob.includes(busqueda)) return false
+    }
+    return true
+  })
+}
