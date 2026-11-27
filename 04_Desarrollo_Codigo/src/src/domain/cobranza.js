@@ -4,7 +4,7 @@ export function redondear(valor) {
   return Math.round((Number(valor) + Number.EPSILON) * 100) / 100
 }
 
-export const LEYENDA_REPORTE_PERIODO = 'PENDIENTE DE VALIDAR CONTRA SRS'
+export const LEYENDA_REPORTE_PERIODO = 'Reporte del periodo por empresa (RF-17): cargos, pagos y saldo entre las fechas elegidas.'
 
 export function generarCargos({ empresaId, citaId, estudios, catalogo, fecha }) {
   return estudios.map((id) => {
