@@ -179,8 +179,9 @@ describe('cobranza e histórico (RF-16 a RF-18)', () => {
       desde: '2026-10-01',
       hasta: '2026-10-31'
     })
-    expect(resultado.leyenda).toBe('PENDIENTE DE VALIDAR CONTRA SRS')
-    expect(LEYENDA_REPORTE_PERIODO).toBe('PENDIENTE DE VALIDAR CONTRA SRS')
+    expect(resultado.leyenda).toBe(LEYENDA_REPORTE_PERIODO)
+    expect(LEYENDA_REPORTE_PERIODO).toContain('RF-17')
+    expect(LEYENDA_REPORTE_PERIODO).not.toMatch(/PENDIENTE|no lo define/i)
     expect(resultado.filas[0]).toMatchObject({ cargos: 200, pagos: 50, saldo: 150 })
   })
 })

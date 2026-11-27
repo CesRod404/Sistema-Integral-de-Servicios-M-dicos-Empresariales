@@ -8,7 +8,7 @@ import { Aviso, Boton, Campo } from '../componentes/Ui.jsx'
 const COLUMNAS = [
   ['pendientes', 'Pendientes'],
   ['en_proceso', 'En proceso'],
-  ['finalizado', 'Finalizado'],
+  ['finalizado', 'Finalizada'],
   ['ausentes', 'Ausentes']
 ]
 

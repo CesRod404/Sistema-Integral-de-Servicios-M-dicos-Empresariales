@@ -252,8 +252,7 @@ export function Cobranza() {
       ) : null}
       {pestaña === 'periodo' ? (
         <div className="panel">
-          <Aviso tipo="pendiente">{LEYENDA_REPORTE_PERIODO}</Aviso>
-          <p className="nota">El plan de proyecto menciona un reporte financiero del periodo. El SRS no lo define como módulo; esta vista es un resumen mínimo.</p>
+          <p className="nota">{LEYENDA_REPORTE_PERIODO}</p>
           <div className="filtros">
             <Campo etiqueta="Desde"><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} /></Campo>
             <Campo etiqueta="Hasta"><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} /></Campo>
