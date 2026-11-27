@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSesion } from '../datos/ProveedorSesion.jsx'
-import { columnaKanban } from '../domain/clinica.js'
+import { columnaKanban, puedeMarcarAsistencia } from '../domain/clinica.js'
 import { hoyMexico, formatearHora } from '../domain/fecha.js'
-import { Aviso, Campo } from '../componentes/Ui.jsx'
+import { Aviso, Boton, Campo } from '../componentes/Ui.jsx'
 
 const COLUMNAS = [
   ['pendientes', 'Pendientes'],
   ['en_proceso', 'En proceso'],
-  ['finalizado', 'Finalizado'],
+  ['finalizado', 'Finalizada'],
   ['ausentes', 'Ausentes']
 ]
 
@@ -26,6 +26,12 @@ export function PacientesDoctor() {
   useEffect(() => {
     api.listarEmpresas().then((resultado) => { if (resultado.ok) setEmpresas(resultado.datos) })
   }, [api])
+
+  async function cargar(dia = fecha) {
+    const resultado = await api.listarCitas(dia)
+    if (!resultado.ok) setError(resultado.mensaje)
+    else setCitas(resultado.datos)
+  }
 
   useEffect(() => {
     let vivo = true
@@ -47,19 +53,33 @@ export function PacientesDoctor() {
   function abrir(cita) {
     const columna = columnaKanban(cita)
     if (columna === 'ausentes' || cita.estadoAsistencia === 'programada') {
-      setAviso('La atención se abre cuando el administrador marca al paciente como presente.')
+      setAviso('Marque al paciente como presente para abrir la atención.')
       return
     }
     if (cita.estadoAsistencia === 'cancelada') return
     navigate(`/app/atencion/${cita.id}`)
   }
 
+  async function asistencia(cita, estado, evento) {
+    evento.stopPropagation()
+    const resultado = await api.registrarAsistencia(cita.id, estado)
+    if (!resultado.ok) {
+      setError(resultado.mensaje)
+      return
+    }
+    setError('')
+    setAviso(estado === 'presente'
+      ? 'El paciente quedó como presente. Ya puede abrir la atención.'
+      : 'El paciente quedó como ausente.')
+    await cargar(fecha)
+  }
+
   return (
     <section>
       <div className="encabezado-pagina">
         <div>
-          <h1>Pacientes</h1>
-          <p className="nota">Cola del día. El estado presente o ausente lo registra el administrador.</p>
+          <h1>Cola del día</h1>
+          <p className="nota">Cola del día. Puede marcar presente o ausente y, si está presente, abrir la atención. Programar, reprogramar o cancelar citas sigue a cargo del administrador.</p>
         </div>
       </div>
       <Aviso tipo="error">{error}</Aviso>
@@ -91,6 +111,12 @@ export function PacientesDoctor() {
                     <small>{cita.empresaNombre}</small>
                     <small>{formatearHora(cita.fechaHora)}{cita.estadoAsistencia === 'programada' ? ' · Sin asistencia' : ''}</small>
                   </button>
+                  {puedeMarcarAsistencia(cita) ? (
+                    <div className="acciones-tabla">
+                      <Boton variante="linea" onClick={(evento) => asistencia(cita, 'presente', evento)}>Presente</Boton>
+                      <Boton variante="linea" onClick={(evento) => asistencia(cita, 'ausente', evento)}>Ausente</Boton>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </section>

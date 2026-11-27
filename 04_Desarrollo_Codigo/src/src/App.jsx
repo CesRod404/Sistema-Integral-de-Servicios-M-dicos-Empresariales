@@ -3,17 +3,18 @@ import { useSesion } from './datos/ProveedorSesion.jsx'
 import { puedeAcceder } from './domain/roles.js'
 import { LayoutPublico } from './componentes/LayoutPublico.jsx'
 import { LayoutApp } from './componentes/LayoutApp.jsx'
-import { InicioPublico } from './paginas/InicioPublico.jsx'
-import { ServiciosPublico } from './paginas/ServiciosPublico.jsx'
+import Inicio from './paginas/Inicio.jsx'
+import Servicios from './paginas/Servicios.jsx'
 import { ContactoPublico } from './paginas/ContactoPublico.jsx'
 import { Login } from './paginas/Login.jsx'
 import { Recuperar } from './paginas/Recuperar.jsx'
 import { PanelInicio } from './paginas/PanelInicio.jsx'
-import { PacientesDoctor } from './paginas/PacientesDoctor.jsx'
-import { FichaPaciente, PacientesAdmin } from './paginas/PacientesAdmin.jsx'
+import { Pacientes } from './paginas/Pacientes.jsx'
+import { FichaPaciente } from './paginas/PacientesAdmin.jsx'
 import { Atencion } from './paginas/Atencion.jsx'
 import { Citas } from './paginas/Citas.jsx'
 import { Empresas } from './paginas/Empresas.jsx'
+import { PlantillaEmpresa } from './paginas/PlantillaEmpresa.jsx'
 import { Importacion } from './paginas/Importacion.jsx'
 import { Cobranza } from './paginas/Cobranza.jsx'
 
@@ -36,8 +37,8 @@ export function App() {
   return (
     <Routes>
       <Route element={<LayoutPublico />}>
-        <Route path="/" element={<InicioPublico />} />
-        <Route path="/servicios" element={<ServiciosPublico />} />
+        <Route path="/" element={<Inicio />} />
+        <Route path="/servicios" element={<Servicios />} />
         <Route path="/contacto" element={<ContactoPublico />} />
         <Route path="/login" element={<Login />} />
         <Route path="/recuperar" element={<Recuperar />} />
@@ -45,11 +46,12 @@ export function App() {
       <Route path="/app" element={<RutaPrivada><LayoutApp /></RutaPrivada>}>
         <Route index element={<Navigate to={usuario?.rol === 'doctor' ? '/app/pacientes' : '/app/inicio'} replace />} />
         <Route path="inicio" element={<PanelInicio />} />
-        <Route path="pacientes" element={usuario?.rol === 'doctor' ? <PacientesDoctor /> : <PacientesAdmin />} />
-        <Route path="pacientes/:empleadoId" element={<Solo rol="administrador" ruta="/app/pacientes"><FichaPaciente /></Solo>} />
+        <Route path="pacientes" element={<Pacientes />} />
+        <Route path="pacientes/:empleadoId" element={<FichaPaciente />} />
         <Route path="atencion/:citaId" element={<Solo rol="doctor" ruta="/app/atencion"><Atencion /></Solo>} />
         <Route path="citas" element={<Citas />} />
         <Route path="empresas" element={<Solo rol="administrador" ruta="/app/empresas"><Empresas /></Solo>} />
+        <Route path="empresas/:empresaId/plantilla" element={<Solo rol="administrador" ruta="/app/empresas"><PlantillaEmpresa /></Solo>} />
         <Route path="importacion" element={<Solo rol="administrador" ruta="/app/importacion"><Importacion /></Solo>} />
         <Route path="cobranza" element={<Solo rol="administrador" ruta="/app/cobranza"><Cobranza /></Solo>} />
       </Route>

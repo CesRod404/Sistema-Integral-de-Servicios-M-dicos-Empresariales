@@ -1,6 +1,9 @@
 export function cambiarAsistencia(cita, nuevoEstado, rol) {
-  if (rol !== 'administrador') {
-    return { ok: false, mensaje: 'Solo el administrador puede registrar la asistencia.' }
+  // S7-T12: el administrador y el doctor pueden marcar presente o ausente
+  // (decisión del equipo, 24/11/2026). El SRS RF-13 v1.6 lo asignaba solo al
+  // administrador. Reprogramar y cancelar siguen siendo solo del administrador.
+  if (!['administrador', 'doctor'].includes(rol)) {
+    return { ok: false, mensaje: 'Solo el administrador o el doctor pueden registrar la asistencia.' }
   }
   if (!['presente', 'ausente'].includes(nuevoEstado)) {
     return { ok: false, mensaje: 'El estado de asistencia debe ser presente o ausente.' }
@@ -43,4 +46,8 @@ export function columnaKanban({ estadoAsistencia, estadoExpediente }) {
   if (estadoExpediente === 'abierto') return 'en_proceso'
   if (estadoAsistencia === 'presente' || estadoAsistencia === 'programada') return 'pendientes'
   return null
+}
+
+export function puedeMarcarAsistencia(cita) {
+  return ['programada', 'presente', 'ausente'].includes(cita?.estadoAsistencia)
 }

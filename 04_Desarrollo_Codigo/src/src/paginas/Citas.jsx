@@ -76,7 +76,9 @@ export function Citas() {
       <div className="encabezado-pagina">
         <div>
           <h1>Citas</h1>
-          <p className="nota">{admin ? 'Agenda, reprogramación y sala de espera.' : 'Consulta de la agenda. La asistencia la registra el administrador.'}</p>
+          <p className="nota">{admin
+            ? 'Agenda, reprogramación y sala de espera.'
+            : 'Consulta de la agenda. Puede marcar presente o ausente. Programar, reprogramar o cancelar sigue a cargo del administrador.'}</p>
         </div>
         <div className="acciones">
           <Boton variante="linea" onClick={() => moverDia(-1)}>Día anterior</Boton>
@@ -99,18 +101,20 @@ export function Citas() {
                 <div className="nota">{cita.empresaNombre}</div>
               </div>
               <Badge tono={tonoEstado(cita.estadoAsistencia)}>{etiquetaEstado(cita.estadoAsistencia)}</Badge>
-              {admin ? (
-                <div className="acciones-tabla">
-                  {['programada', 'presente', 'ausente'].includes(cita.estadoAsistencia) ? (
-                    <>
-                      <Boton variante="linea" onClick={() => asistencia(cita, 'presente')}>Presente</Boton>
-                      <Boton variante="linea" onClick={() => asistencia(cita, 'ausente')}>Ausente</Boton>
-                      <Boton variante="texto" onClick={() => setForm({ id: cita.id, empleadoId: cita.empleadoId, fechaHoraLocal: aMexicoInput(cita.fechaHora), motivo: cita.motivo })}>Reprogramar</Boton>
-                      <Boton variante="peligro" onClick={() => cancelar(cita)}>Cancelar</Boton>
-                    </>
-                  ) : null}
-                </div>
-              ) : <span />}
+              <div className="acciones-tabla">
+                {['programada', 'presente', 'ausente'].includes(cita.estadoAsistencia) ? (
+                  <>
+                    <Boton variante="linea" onClick={() => asistencia(cita, 'presente')}>Presente</Boton>
+                    <Boton variante="linea" onClick={() => asistencia(cita, 'ausente')}>Ausente</Boton>
+                    {admin ? (
+                      <>
+                        <Boton variante="texto" onClick={() => setForm({ id: cita.id, empleadoId: cita.empleadoId, fechaHoraLocal: aMexicoInput(cita.fechaHora), motivo: cita.motivo })}>Reprogramar</Boton>
+                        <Boton variante="peligro" onClick={() => cancelar(cita)}>Cancelar</Boton>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
             </article>
           ))}
         </div>

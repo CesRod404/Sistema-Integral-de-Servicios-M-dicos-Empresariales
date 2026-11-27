@@ -123,11 +123,13 @@ describe('acceso', () => {
 })
 
 describe('asistencia y expediente', () => {
-  it('solo el administrador marca presente o ausente (RF-13)', () => {
+  it('el administrador o el doctor marcan presente o ausente (S7-T12; RF-13 ampliado el 24/11/2026)', () => {
     const cita = { estadoAsistencia: 'programada' }
-    expect(cambiarAsistencia(cita, 'presente', 'doctor').ok).toBe(false)
+    expect(cambiarAsistencia(cita, 'presente', 'doctor')).toEqual({ ok: true, estado: 'presente' })
     expect(cambiarAsistencia(cita, 'ausente', 'administrador')).toEqual({ ok: true, estado: 'ausente' })
+    expect(cambiarAsistencia(cita, 'presente', 'recepcion').ok).toBe(false)
     expect(cambiarAsistencia({ estadoAsistencia: 'cerrada' }, 'presente', 'administrador').ok).toBe(false)
+    expect(cambiarAsistencia({ estadoAsistencia: 'cerrada' }, 'presente', 'doctor').ok).toBe(false)
   })
 
   it('impide cerrar el expediente sin fecha o diagnóstico (RF-15)', () => {
@@ -177,8 +179,9 @@ describe('cobranza e histórico (RF-16 a RF-18)', () => {
       desde: '2026-10-01',
       hasta: '2026-10-31'
     })
-    expect(resultado.leyenda).toBe('PENDIENTE DE VALIDAR CONTRA SRS')
-    expect(LEYENDA_REPORTE_PERIODO).toBe('PENDIENTE DE VALIDAR CONTRA SRS')
+    expect(resultado.leyenda).toBe(LEYENDA_REPORTE_PERIODO)
+    expect(LEYENDA_REPORTE_PERIODO).toContain('RF-17')
+    expect(LEYENDA_REPORTE_PERIODO).not.toMatch(/PENDIENTE|no lo define/i)
     expect(resultado.filas[0]).toMatchObject({ cargos: 200, pagos: 50, saldo: 150 })
   })
 })

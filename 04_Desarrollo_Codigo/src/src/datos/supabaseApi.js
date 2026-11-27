@@ -4,6 +4,10 @@ import { validarContrasena, validarCorreo, validarCurp, normalizarCorreo, valida
 import { desdeMexicoInput } from '../domain/fecha.js'
 import { vistaEstudio } from '../domain/roles.js'
 import { reportePeriodo as armarReporte } from '../domain/cobranza.js'
+import { armarRpcImportarEmpleados } from '../domain/ingestaEmpleados.js'
+import { MENSAJES_PLANTILLA, plantillaPredeterminada, validarPlantilla } from '../domain/plantillaEmpresa.js'
+import { pacienteDeFila, resolverPlantilla } from '../domain/atencionPlantilla.js'
+import { datosContactoEmpresa, prepararEdicionEmpresa, validarCambioEstadoEmpresa } from '../domain/empresas.js'
 
 function mal(mensaje) {
   return { ok: false, mensaje }
@@ -13,6 +17,14 @@ function bien(datos) {
 }
 function fallo(error) {
   return mal(mensajeAmigable(error))
+}
+
+const COLUMNAS_EMPRESA = 'id, folio, nombre, contacto, email, telefono, direccion, notas, estado'
+
+// Índice único empresas_nombre_unico (lower(nombre)): mismo mensaje que el modo demo.
+function falloEmpresa(error) {
+  if (error?.code === '23505') return mal('Ya existe una empresa con ese nombre.')
+  return fallo(error)
 }
 
 let cache = null
@@ -50,6 +62,18 @@ function mapEmpresa(fila) {
   }
 }
 
+function mapPlantilla(fila) {
+  if (!fila) return null
+  return {
+    id: fila.id,
+    empresaId: fila.empresa_id,
+    version: fila.version,
+    columnas: Array.isArray(fila.columnas) ? fila.columnas : [],
+    activa: fila.activa ?? true,
+    actualizadoEn: fila.updated_at || null
+  }
+}
+
 function mapEmpleado(fila) {
   const empresa = fila.empresas || {}
   return {
@@ -63,8 +87,19 @@ function mapEmpleado(fila) {
     telefono: fila.telefono,
     estado: fila.estado,
     empresaId: fila.empresa_id,
-    empresaNombre: empresa.nombre || '—'
+    empresaNombre: empresa.nombre || '—',
+    plantillaVersion: fila.plantilla_version ?? null,
+    datosExtra: fila.datos_extra && typeof fila.datos_extra === 'object' && !Array.isArray(fila.datos_extra) ? fila.datos_extra : {}
   }
+}
+
+const SELECT_EMPLEADO = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, datos_extra, plantilla_version, empresas(nombre)'
+const SELECT_EMPLEADO_SIN_EXTRA = 'id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)'
+
+// Mientras no se apliquen las migraciones de CRQ-004 (datos_extra) o de S7-T15
+// (plantilla_version) se reintenta sin esas columnas.
+function esErrorDatosExtra(error) {
+  return /datos_extra|plantilla_version|42703/.test(`${error?.code || ''} ${error?.message || ''}`)
 }
 
 export function crearApiSupabase() {
@@ -98,6 +133,18 @@ export function crearApiSupabase() {
       }
       cache = perfil
       return { ok: true, usuario: perfil }
+    },
+
+    suscribirSesion(alCerrar) {
+      // US-ACC-01: si la sesión de Supabase termina (cierre en otra pestaña o token
+      // no renovable), se limpia el perfil en memoria y la app vuelve a /login.
+      const { data } = supabase.auth.onAuthStateChange((evento, sesion) => {
+        if (evento === 'SIGNED_OUT' || !sesion) {
+          cache = null
+          alCerrar()
+        }
+      })
+      return () => data.subscription.unsubscribe()
     },
 
     async cerrarSesion() {
@@ -144,28 +191,59 @@ export function crearApiSupabase() {
       if (permiso) return mal(permiso)
       const errores = validarEmpresa(datos)
       if (Object.keys(errores).length) return mal(Object.values(errores)[0])
-      const payload = {
-        nombre: datos.nombre.trim(),
-        contacto: datos.contacto.trim(),
-        email: normalizarCorreo(datos.email),
-        telefono: normalizarTelefono(datos.telefono).valor,
-        direccion: datos.direccion?.trim() || null,
-        notas: datos.notas?.trim() || null
+      if (datos.id) {
+        // US-EMP-02 / RF-05: se leen los datos vigentes y solo se actualizan los
+        // campos que cambiaron; updated_at lo pone trg_empresas_updated_at.
+        const vigente = await supabase.from('empresas').select(COLUMNAS_EMPRESA).eq('id', datos.id).maybeSingle()
+        if (vigente.error) return fallo(vigente.error)
+        const edicion = prepararEdicionEmpresa(vigente.data ? mapEmpresa(vigente.data) : null, datos)
+        if (!edicion.ok) return mal(edicion.mensaje)
+        if (!edicion.campos.length) return { ok: true, datos: mapEmpresa(vigente.data), sinCambios: true }
+        const { data, error } = await supabase.from('empresas').update(edicion.cambios).eq('id', datos.id).select(COLUMNAS_EMPRESA).single()
+        if (error) return falloEmpresa(error)
+        return bien(mapEmpresa(data))
       }
-      const consulta = datos.id
-        ? supabase.from('empresas').update(payload).eq('id', datos.id).select().single()
-        : supabase.from('empresas').insert(payload).select().single()
-      const { data, error } = await consulta
-      if (error) return fallo(error)
+      const { data, error } = await supabase.from('empresas').insert(datosContactoEmpresa(datos)).select().single()
+      if (error) return falloEmpresa(error)
       return bien(mapEmpresa(data))
     },
 
     async cambiarEstadoEmpresa(id, nuevoEstado) {
       const permiso = exigir(await usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
-      const { data, error } = await supabase.from('empresas').update({ estado: nuevoEstado }).eq('id', id).select().single()
+      // US-EMP-03 / RF-06: baja lógica. Solo cambia el estado; el borrado físico
+      // lo impide trg_empresas_no_delete y el historial queda intacto.
+      const vigente = await supabase.from('empresas').select('id, estado').eq('id', id).maybeSingle()
+      if (vigente.error) return fallo(vigente.error)
+      const invalido = validarCambioEstadoEmpresa(vigente.data, nuevoEstado)
+      if (invalido) return mal(invalido)
+      const { data, error } = await supabase.from('empresas').update({ estado: nuevoEstado }).eq('id', id).select(COLUMNAS_EMPRESA).single()
       if (error) return fallo(error)
       return bien(mapEmpresa(data))
+    },
+
+    async darDeBajaEmpresas(ids) {
+      // S7-T17: baja lógica de varias empresas (mismo efecto que cambiarEstadoEmpresa
+      // a «inactivo»; el borrado físico lo impide trg_empresas_no_delete).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos una empresa.')
+      const { data, error } = await supabase.from('empresas').update({ estado: 'inactivo' }).in('id', lista).eq('estado', 'activo').select('id')
+      if (error) return fallo(error)
+      return bien({ actualizados: (data || []).length, omitidos: lista.length - (data || []).length })
+    },
+
+    async darDeBajaPacientes(ids) {
+      // S7-T17: baja lógica de varios pacientes: quedan «inactivo». Citas,
+      // expedientes y cobros se conservan (trg_empleados_no_delete impide borrar).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const lista = [...new Set(ids || [])].filter(Boolean)
+      if (!lista.length) return mal('Seleccione al menos un paciente.')
+      const { data, error } = await supabase.from('empleados').update({ estado: 'inactivo' }).in('id', lista).neq('estado', 'inactivo').select('id')
+      if (error) return fallo(error)
+      return bien({ actualizados: (data || []).length, omitidos: lista.length - (data || []).length })
     },
 
     async listarEmpleados() {
@@ -176,25 +254,70 @@ export function crearApiSupabase() {
       return bien((data || []).map(mapEmpleado))
     },
 
+    async obtenerEmpleado(id) {
+      // S7-T14: datos completos del paciente (incluye datos_extra) para editarlo
+      // con los campos de la plantilla de su empresa.
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
+      if (permiso) return mal(permiso)
+      let { data, error } = await supabase.from('empleados').select(SELECT_EMPLEADO).eq('id', id).maybeSingle()
+      if (error && esErrorDatosExtra(error)) {
+        const reintento = await supabase.from('empleados').select(SELECT_EMPLEADO_SIN_EXTRA).eq('id', id).maybeSingle()
+        data = reintento.data
+        error = reintento.error
+      }
+      if (error) return fallo(error)
+      if (!data) return mal('El paciente no existe.')
+      return bien(mapEmpleado(data))
+    },
+
     async guardarEmpleado(datos) {
-      const permiso = exigir(await usuarioActual(), ['administrador'])
+      // S5-T14: el doctor también da de alta y edita pacientes (Project Plan §1:
+      // "El Doctor gestionará ... datos del paciente"). Requiere la migración
+      // 202610300001_pacientes_doctor.sql (RLS empleados_insert/empleados_update).
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const errores = validarEmpleado(datos)
       if (Object.keys(errores).length) return mal(Object.values(errores)[0])
+      // El formulario solo captura nombre, empresa y estado (SDD §4.1). Los campos
+      // opcionales que vienen de la importación de Excel solo se escriben si se
+      // envían, para no borrarlos al editar.
       const payload = {
         nombre: datos.nombre.trim(),
         empresa_id: datos.empresaId,
-        curp: validarCurp(datos.curp).valor,
-        clave_empleado: datos.claveEmpleado?.trim() || null,
-        email: datos.email ? normalizarCorreo(datos.email) : null,
-        telefono: normalizarTelefono(datos.telefono).valor,
-        edad: normalizarEdad(datos.edad).valor,
-        estado: datos.id ? datos.estado || 'activo' : 'provisional'
+        estado: datos.estado || (datos.id ? 'activo' : 'provisional')
       }
-      const consulta = datos.id
-        ? supabase.from('empleados').update(payload).eq('id', datos.id).select('id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)').single()
-        : supabase.from('empleados').insert(payload).select('id, folio, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre)').single()
-      const { data, error } = await consulta
+      if ('curp' in datos) payload.curp = validarCurp(datos.curp).valor
+      if ('claveEmpleado' in datos) payload.clave_empleado = datos.claveEmpleado?.trim() || null
+      if ('email' in datos) payload.email = datos.email ? normalizarCorreo(datos.email) : null
+      if ('telefono' in datos) payload.telefono = normalizarTelefono(datos.telefono).valor
+      if ('edad' in datos) payload.edad = normalizarEdad(datos.edad).valor
+      if ('datosExtra' in datos) {
+        payload.datos_extra = datos.datosExtra && typeof datos.datosExtra === 'object' && !Array.isArray(datos.datosExtra)
+          ? datos.datosExtra
+          : {}
+      }
+      // S7-T15: versión de la plantilla con la que se capturó (0 = predeterminada).
+      if ('plantillaVersion' in datos && Number.isInteger(Number(datos.plantillaVersion)) && Number(datos.plantillaVersion) >= 0) {
+        payload.plantilla_version = Number(datos.plantillaVersion)
+      }
+      async function ejecutar(columnas, cuerpo) {
+        const tabla = supabase.from('empleados')
+        const consulta = datos.id
+          ? tabla.update(cuerpo).eq('id', datos.id).select(columnas).single()
+          : tabla.insert(cuerpo).select(columnas).single()
+        return consulta
+      }
+      let { data, error } = await ejecutar(SELECT_EMPLEADO, payload)
+      if (error && (payload.datos_extra !== undefined || payload.plantilla_version !== undefined) && esErrorDatosExtra(error)) {
+        const { datos_extra, plantilla_version, ...sinExtra } = payload
+        const reintento = await ejecutar(SELECT_EMPLEADO_SIN_EXTRA, sinExtra)
+        data = reintento.data
+        error = reintento.error
+      } else if (error && esErrorDatosExtra(error)) {
+        const reintento = await ejecutar(SELECT_EMPLEADO_SIN_EXTRA, payload)
+        data = reintento.data
+        error = reintento.error
+      }
       if (error) return fallo(error)
       return bien(mapEmpleado(data))
     },
@@ -248,6 +371,16 @@ export function crearApiSupabase() {
       return bien(true)
     },
 
+    async abrirAtencionDoctor(empleadoId) {
+      // S5-T14 / SRS RF-14: el doctor abre la atención del paciente para capturar
+      // el examen y adjuntar el PDF. RPC de la migración 202610300001.
+      const permiso = exigir(await usuarioActual(), ['doctor'])
+      if (permiso) return mal(permiso)
+      const { data, error } = await supabase.rpc('abrir_atencion_doctor', { p_empleado_id: empleadoId })
+      if (error) return fallo(error)
+      return bien({ citaId: data })
+    },
+
     async registrarAsistencia(citaId, nuevoEstado) {
       const { error } = await supabase.rpc('registrar_asistencia', { p_cita_id: citaId, p_estado: nuevoEstado })
       if (error) return fallo(error)
@@ -264,7 +397,12 @@ export function crearApiSupabase() {
       const usuario = await usuarioActual()
       const permiso = exigir(usuario, ['doctor'])
       if (permiso) return mal(permiso)
-      const cita = await supabase.from('citas').select('id, empleado_id, fecha_hora, estado_asistencia, motivo, empleados(nombre, edad, empresas(nombre))').eq('id', citaId).maybeSingle()
+      const selectCita = 'id, empleado_id, fecha_hora, estado_asistencia, motivo, empleados(id, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, datos_extra, empresas(nombre))'
+      const selectCitaSinExtra = 'id, empleado_id, fecha_hora, estado_asistencia, motivo, empleados(id, nombre, edad, curp, clave_empleado, email, telefono, estado, empresa_id, empresas(nombre))'
+      let cita = await supabase.from('citas').select(selectCita).eq('id', citaId).maybeSingle()
+      if (cita.error && esErrorDatosExtra(cita.error)) {
+        cita = await supabase.from('citas').select(selectCitaSinExtra).eq('id', citaId).maybeSingle()
+      }
       if (cita.error) return fallo(cita.error)
       if (!cita.data) return mal('La cita no existe.')
       const expediente = await supabase.from('expedientes_clinicos').select('id, cita_id, diagnostico, observaciones, estado_expediente, fecha_atencion').eq('cita_id', citaId).maybeSingle()
@@ -282,17 +420,31 @@ export function crearApiSupabase() {
         if (docs.error) return fallo(docs.error)
         archivos = (docs.data || []).map((item) => ({ id: item.id, nombre: item.nombre, tamano: item.tamano_bytes }))
       }
+      const empleado = cita.data.empleados || {}
+      const empresaId = empleado.empresa_id || null
+      let plantilla = plantillaPredeterminada(empresaId)
+      if (empresaId) {
+        const vigente = await supabase
+          .from('plantillas_empresa')
+          .select('id, empresa_id, version, columnas, activa, updated_at')
+          .eq('empresa_id', empresaId)
+          .eq('activa', true)
+          .maybeSingle()
+        if (!vigente.error && vigente.data) plantilla = resolverPlantilla(mapPlantilla(vigente.data), empresaId)
+      }
       return bien({
         cita: {
           id: cita.data.id,
           empleadoId: cita.data.empleado_id,
-          empleadoNombre: cita.data.empleados?.nombre || '—',
-          edad: cita.data.empleados?.edad,
-          empresaNombre: cita.data.empleados?.empresas?.nombre || '—',
+          empleadoNombre: empleado.nombre || '—',
+          edad: empleado.edad,
+          empresaNombre: empleado.empresas?.nombre || '—',
           fechaHora: cita.data.fecha_hora,
           estadoAsistencia: cita.data.estado_asistencia,
           motivo: cita.data.motivo || ''
         },
+        paciente: pacienteDeFila(empleado),
+        plantilla,
         expediente: expediente.data ? {
           id: expediente.data.id,
           citaId: expediente.data.cita_id,
@@ -428,6 +580,24 @@ export function crearApiSupabase() {
       return bien(true)
     },
 
+    async registrarPagosLote({ cargoIds, referencia, fecha }) {
+      // S7-T18: varios cargos pagados por su saldo completo en una transacción
+      // (RPC registrar_pagos_lote, migración 202611250003_pagos_en_lote.sql).
+      const permiso = exigir(await usuarioActual(), ['administrador'])
+      if (permiso) return mal(permiso)
+      const ids = [...new Set(cargoIds || [])].filter(Boolean)
+      if (!ids.length) return mal('Seleccione al menos un cargo.')
+      if (!String(referencia || '').trim()) return mal('Capture la referencia del depósito o transferencia.')
+      if (!fecha) return mal('Indique la fecha del pago.')
+      const { data, error } = await supabase.rpc('registrar_pagos_lote', {
+        p_cargo_ids: ids,
+        p_referencia: String(referencia).trim(),
+        p_fecha: fecha
+      })
+      if (error) return fallo(error)
+      return bien({ pagados: Number(data?.pagados) || 0, omitidos: Number(data?.omitidos) || 0, total: Number(data?.total) || 0 })
+    },
+
     async reportePeriodo(desde, hasta) {
       const lista = await this.listarCargos()
       if (!lista.ok) return lista
@@ -440,17 +610,50 @@ export function crearApiSupabase() {
       }))
     },
 
-    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas }) {
+    async confirmarImportacion({ empresaId, nombreArchivo, sobrescribir, filas, plantillaVersion = null }) {
       const permiso = exigir(await usuarioActual(), ['administrador'])
       if (permiso) return mal(permiso)
-      const { data, error } = await supabase.rpc('importar_empleados', {
-        p_empresa_id: empresaId,
-        p_nombre_archivo: nombreArchivo,
-        p_sobrescribir: Boolean(sobrescribir),
-        p_filas: filas
-      })
+      const { data, error } = await supabase.rpc('importar_empleados', armarRpcImportarEmpleados({
+        empresaId,
+        nombreArchivo,
+        sobrescribir,
+        filas,
+        plantillaVersion
+      }))
       if (error) return fallo(error)
       return bien(data)
+    },
+
+    async obtenerPlantillaEmpresa(empresaId) {
+      // CRQ-004: plantilla vigente de la empresa (tabla plantillas_empresa) o
+      // null si la empresa usa la plantilla predeterminada.
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
+      if (permiso) return mal(permiso)
+      const { data, error } = await supabase
+        .from('plantillas_empresa')
+        .select('id, empresa_id, version, columnas, activa, updated_at')
+        .eq('empresa_id', empresaId)
+        .eq('activa', true)
+        .maybeSingle()
+      if (error) {
+        // Mientras no se aplique 202611120001_plantillas_empresa.sql la tabla no
+        // existe: la importación sigue con la plantilla predeterminada.
+        if (/42P01|PGRST205|plantillas_empresa/.test(`${error.code || ''} ${error.message || ''}`)) return bien(null)
+        return fallo(error)
+      }
+      return bien(mapPlantilla(data))
+    },
+
+    async guardarPlantillaEmpresa(empresaId, columnas) {
+      if (exigir(await usuarioActual(), ['administrador'])) return mal(MENSAJES_PLANTILLA.PERMISO)
+      const validacion = validarPlantilla(columnas)
+      if (!validacion.ok) return mal(validacion.errores[0])
+      const { data, error } = await supabase.rpc('guardar_plantilla_empresa', {
+        p_empresa_id: empresaId,
+        p_columnas: validacion.columnas
+      })
+      if (error) return fallo(error)
+      return bien(mapPlantilla(data))
     },
 
     async listarImportaciones() {
@@ -471,7 +674,8 @@ export function crearApiSupabase() {
     },
 
     async consultarPacientesAdmin() {
-      const permiso = exigir(await usuarioActual(), ['administrador'])
+      // S5-T14: Administrador y Doctor comparten la misma lista de pacientes.
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase.from('v_pacientes_admin').select('*').order('nombre')
       if (error) return fallo(error)
@@ -491,12 +695,15 @@ export function crearApiSupabase() {
         ultimaCita: fila.ultima_cita,
         estadoExpediente: fila.estado_expediente,
         fechaAtencion: fila.fecha_atencion,
-        estudiosNombres: fila.estudios_nombres || ''
+        estudiosNombres: fila.estudios_nombres || '',
+        fechaRegistro: fila.fecha_registro || null,
+        plantillaVersion: fila.plantilla_version ?? null,
+        plantillaVersionVigente: fila.plantilla_version_vigente ?? null
       })))
     },
 
     async consultarVisitasAdmin(empleadoId) {
-      const permiso = exigir(await usuarioActual(), ['administrador'])
+      const permiso = exigir(await usuarioActual(), ['administrador', 'doctor'])
       if (permiso) return mal(permiso)
       const { data, error } = await supabase.from('v_visitas_admin').select('*').eq('empleado_id', empleadoId).order('fecha_hora', { ascending: false })
       if (error) return fallo(error)
